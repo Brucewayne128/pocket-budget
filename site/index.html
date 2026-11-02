@@ -235,6 +235,25 @@ header h1{font-size:clamp(1.05rem,5.2vw,1.35rem);white-space:nowrap;min-width:0}
 .bill .cd{font-weight:600;color:var(--ink)}
 .bill .cd.soon{color:var(--warn)}
 .bill .cd.late{color:var(--bad)}
+
+.incomebtn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+body.incomemode .wrap>*:not(header):not(#incomePage):not(.viewbanner):not(.notice){display:none !important}
+.bill.dep{cursor:default}
+.depicon{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:.85rem;background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.bill .cd.got{color:var(--good)}
+.ledger{display:flex;flex-direction:column}
+.lrow{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:10px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.lrow:last-child{border-bottom:0}
+.lrow span{font-weight:600}
+.lrow b{font-weight:700}
+.lrow small{grid-column:1/-1;color:var(--muted);font-size:.82rem}
+.lrow .plus{color:var(--good)}
+.lrow.total{border-top:2px solid var(--line)}
+.lrow.left{padding-top:14px}
+.lrow.left span{font-family:var(--display);font-size:1.1rem}
+.lrow.left b{font-family:var(--display);font-size:1.7rem;font-weight:800}
+.lrow.left b.neg{color:var(--bad)}
+@media (max-width:420px){.live.on #liveText{display:none}}
 </style>
 </head>
 <body>
@@ -242,6 +261,9 @@ header h1{font-size:clamp(1.05rem,5.2vw,1.35rem);white-space:nowrap;min-width:0}
   <header>
     <h1>Pocket Budget</h1>
     <div class="hdr-right">
+      <button type="button" class="themebtn incomebtn" id="incomeBtn" aria-label="Open the income page" aria-pressed="false" title="Income">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3v18M16.5 7.5c-.8-1.3-2.4-2-4.5-2-2.6 0-4.3 1.3-4.3 3.1 0 4.4 9 2.4 9 6.9 0 1.9-1.9 3.2-4.7 3.2-2.3 0-4-.8-4.8-2.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button type="button" class="themebtn graphbtn" id="graphBtn" aria-label="Open the year graph" aria-pressed="false" title="Year graph">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5.5" y="11" width="3" height="7" rx="1" fill="currentColor"/><rect x="10.5" y="6" width="3" height="12" rx="1" fill="currentColor"/><rect x="15.5" y="13" width="3" height="5" rx="1" fill="currentColor"/></svg>
       </button>
@@ -372,6 +394,24 @@ header h1{font-size:clamp(1.05rem,5.2vw,1.35rem);white-space:nowrap;min-width:0}
     </div></div>
   </section>
 
+  <section id="incomePage" class="yearpage" hidden>
+    <div class="month">
+      <button class="iconbtn" id="iPrev" aria-label="Previous month">‹</button>
+      <h2 id="incomeMonth">This month</h2>
+      <button class="iconbtn" id="iNext" aria-label="Next month">›</button>
+    </div>
+    <section class="card">
+      <div class="cardhead"><h3>Deposits</h3><span class="num" id="incomeCount"></span><button class="editbtn" id="editIncome" type="button">Edit deposits</button></div>
+      <div class="editor" id="incomeEditor" hidden></div>
+      <div class="bills" id="deposits"></div>
+    </section>
+    <section class="card">
+      <h3>This month</h3>
+      <div class="ledger" id="incomeSummary"></div>
+    </section>
+    <button type="button" class="ghost backbtn" id="iBack">← Back to bills and spending</button>
+  </section>
+
   <section id="yearPage" class="yearpage" hidden>
     <div class="month">
       <button class="iconbtn" id="yPrev" aria-label="Previous year">‹</button>
@@ -443,7 +483,7 @@ function store(k,v){try{localStorage.setItem(k,v)}catch{}}
 function load(k){try{return localStorage.getItem(k)}catch{return null}}
 
 let view=new Date(); view.setDate(1);
-let state={paid:{},expenses:[],config:null,billMonths:{},billPlans:{}};
+let state={paid:{},expenses:[],config:null,billMonths:{},billPlans:{},incomeMonths:{},incomePlans:{}};
 let cat="food", budgetRef=null, ready=false, canEdit=false, budgetId=null;
 
 const asList=x=>Array.isArray(x)?x.filter(Boolean):Object.values(x||{}).filter(Boolean);
@@ -456,6 +496,13 @@ function billsFor(mk){
   return state.config?asList(state.config.bills):DEFAULT_BILLS;
 }
 const bills=()=>billsFor(keyOf(view));
+// Deposits work the same way as bills: per month, or "this month and after".
+function incomeFor(mk){
+  const own=state.incomeMonths[mk]; if(own&&own.set) return asList(own.list);
+  const starts=Object.keys(state.incomePlans).filter(k=>k<=mk).sort();
+  if(starts.length) return asList(state.incomePlans[starts[starts.length-1]].list);
+  return [];
+}
 const cats=()=>{const c=state.config?.cats||DEFAULT_CATS;return c.some(x=>x.id==="other")?c:[...c,{id:"other",name:"Other",limit:0,color:"other"}]};
 const catColor=c=>`var(--${c.color||"other"})`;
 const catOf=id=>cats().find(c=>c.id===id)||cats().find(c=>c.id==="other");
@@ -492,6 +539,7 @@ function dueStatus(b,paid){
 }
 function render(){
   try{renderYear()}catch{}
+  try{renderIncome()}catch{}
   try{pushWidget()}catch{}
   const mk=keyOf(view), B=bills(), C=cats();
   const BILLS_BUDGET=B.reduce((s,b)=>s+b.amount,0), SPEND_BUDGET=C.reduce((s,c)=>s+(+c.limit||0),0), TOTAL=BILLS_BUDGET+SPEND_BUDGET;
@@ -608,33 +656,45 @@ $("list").addEventListener("click",async e=>{
 });
 
 const editorClosers=[];
+// Settings for each editable list. Bills and deposits can differ by month; categories apply to every month.
+const EDIT_KINDS={
+  bills:{box:"billsEditor",btn:"editBills",label:"Edit bills",col:"Bill",amtCol:"Per month",ex:"e.g. Internet",
+    add:"a bill",dueCol:"Due day",dueAria:"Day of the month it's due",monthly:true,months:"billMonths",plans:"billPlans",what:"bills",
+    need:n=>`Enter how much ${n} costs each month.`,dayErr:n=>`Enter the day ${n} is due as a number from 1 to 31, or leave it blank.`},
+  income:{box:"incomeEditor",btn:"editIncome",label:"Edit deposits",col:"Deposit",amtCol:"Amount",ex:"e.g. Paycheck",
+    add:"a deposit",dueCol:"Day",dueAria:"Day of the month you get it",monthly:true,months:"incomeMonths",plans:"incomePlans",what:"deposits",
+    need:n=>`Enter how much ${n} is.`,dayErr:n=>`Enter the day you get ${n} as a number from 1 to 31, or leave it blank.`},
+  cats:{box:"catsEditor",btn:"editCats",label:"Edit categories",col:"Category",amtCol:"Monthly budget",ex:"e.g. Pets",add:"a category",monthly:false}
+};
 function makeEditor(kind){
-  const box=$(kind==="bills"?"billsEditor":"catsEditor"), btn=$(kind==="bills"?"editBills":"editCats");
-  const label=kind==="bills"?"Edit bills":"Edit categories", amtKey=kind==="bills"?"amount":"limit";
+  const K=EDIT_KINDS[kind], box=$(K.box), btn=$(K.btn);
+  if(!box||!btn)return;
+  const label=K.label, amtKey=kind==="cats"?"limit":"amount", withDue=!!K.monthly;
   let draft=null, scope="only";
   const close=()=>{box.hidden=true;btn.textContent=label};
   editorClosers.push(close);
+  const source=()=>kind==="bills"?bills():kind==="income"?incomeFor(keyOf(view)):cats();
   function draw(){
-    box.innerHTML=`<div class="ehead${kind==="bills"?" withdue":""}"><span>${kind==="bills"?"Bill":"Category"}</span><span>${kind==="bills"?"Per month":"Monthly budget"}</span>${kind==="bills"?"<span>Due day</span>":""}<span></span></div>`+
+    box.innerHTML=`<div class="ehead${withDue?" withdue":""}"><span>${K.col}</span><span>${K.amtCol}</span>${withDue?`<span>${K.dueCol}</span>`:""}<span></span></div>`+
       draft.map((r,i)=>{const fixed=kind==="cats"&&r.id==="other";
-        return `<div class="erow${kind==="bills"?" withdue":""}">${fixed?`<span class="fixed">Other</span>`:`<input type="text" id="${kind}-n-${i}" data-i="${i}" data-f="name" value="${esc(r.name)}" placeholder="${kind==="bills"?"e.g. Internet":"e.g. Pets"}" maxlength="30" aria-label="Name">`}
-        <input inputmode="decimal" id="${kind}-a-${i}" data-i="${i}" data-f="amt" value="${r[amtKey]===""?"":esc(r[amtKey])}" placeholder="${kind==="bills"?"0.00":"No limit"}" aria-label="Amount">
-        ${kind==="bills"?`<input inputmode="numeric" id="bills-d-${i}" data-i="${i}" data-f="due" value="${r.due?esc(r.due):""}" placeholder="Day" maxlength="2" aria-label="Day of the month it's due">`:""}
+        return `<div class="erow${withDue?" withdue":""}">${fixed?`<span class="fixed">Other</span>`:`<input type="text" id="${kind}-n-${i}" data-i="${i}" data-f="name" value="${esc(r.name)}" placeholder="${K.ex}" maxlength="30" aria-label="Name">`}
+        <input inputmode="decimal" id="${kind}-a-${i}" data-i="${i}" data-f="amt" value="${r[amtKey]===""?"":esc(r[amtKey])}" placeholder="${kind==="cats"?"No limit":"0.00"}" aria-label="Amount">
+        ${withDue?`<input inputmode="numeric" id="${kind}-d-${i}" data-i="${i}" data-f="due" value="${r.due?esc(r.due):""}" placeholder="Day" maxlength="2" aria-label="${K.dueAria}">`:""}
         <button type="button" class="rm" data-rm="${i}" aria-label="Remove" ${fixed?"disabled":""}>×</button></div>`}).join("")+
-      `<button type="button" class="addrow" data-add>+ Add ${kind==="bills"?"a bill":"a category"}</button>
-      ${kind==="bills"?(()=>{const mn=view.toLocaleDateString("en-US",{month:"long"});return `<fieldset class="scope"><legend>Save these bills for</legend>
-        <label><input type="radio" name="billScope" value="only" ${scope==="only"?"checked":""}> ${mn} only</label>
-        <label><input type="radio" name="billScope" value="after" ${scope==="after"?"checked":""}> ${mn} and every month after</label></fieldset>`})():""}
+      `<button type="button" class="addrow" data-add>+ Add ${K.add}</button>
+      ${K.monthly?(()=>{const mn=view.toLocaleDateString("en-US",{month:"long"});return `<fieldset class="scope"><legend>Save these ${K.what} for</legend>
+        <label><input type="radio" name="${kind}Scope" value="only" ${scope==="only"?"checked":""}> ${mn} only</label>
+        <label><input type="radio" name="${kind}Scope" value="after" ${scope==="after"?"checked":""}> ${mn} and every month after</label></fieldset>`})():""}
       <div class="emsg" data-msg></div>
       <div class="eactions"><button type="button" class="primary" data-save>Save</button><button type="button" class="ghost" data-cancel>Cancel</button></div>`;
   }
   btn.onclick=()=>{
     if(!box.hidden){close();return}
-    draft=(kind==="bills"?bills():cats()).map(r=>({...r,[amtKey]:kind==="cats"&&!r.limit?"":r[amtKey]}));
+    draft=source().map(r=>({...r,[amtKey]:kind==="cats"&&!r.limit?"":r[amtKey]}));
     scope="only";
     draw();box.hidden=false;btn.textContent="Close";
   };
-  box.addEventListener("change",e=>{if(e.target.name==="billScope")scope=e.target.value});
+  box.addEventListener("change",e=>{if(e.target.name===kind+"Scope")scope=e.target.value});
   box.addEventListener("input",e=>{const t=e.target;if(t.dataset.i==null)return;const r=draft[+t.dataset.i];
     if(t.dataset.f==="name")r.name=t.value;else if(t.dataset.f==="due")r.due=t.value;else r[amtKey]=t.value});
   box.addEventListener("click",async e=>{
@@ -642,7 +702,7 @@ function makeEditor(kind){
     if(t.dataset.rm!=null){draft.splice(+t.dataset.rm,1);draw();return}
     if(t.hasAttribute("data-add")){
       const used=new Set(draft.map(r=>r.color));
-      draft.push(kind==="bills"?{id:"",name:"",amount:""}:{id:"",name:"",limit:"",color:PALETTE.find(p=>!used.has(p))||"c5"});
+      draft.push(kind==="cats"?{id:"",name:"",limit:"",color:PALETTE.find(p=>!used.has(p))||"c5"}:{id:"",name:"",amount:""});
       draw();const inp=box.querySelector(`#${kind}-n-${draft.length-1}`);inp&&inp.focus();return}
     if(t.hasAttribute("data-cancel")){close();return}
     if(t.hasAttribute("data-save")){
@@ -652,11 +712,12 @@ function makeEditor(kind){
         const raw=String(r[amtKey]??"").trim(), amt=raw===""?0:parseAmt(raw);
         if(!name){m.textContent="Every row needs a name, or remove the empty row.";return}
         if(!(amt>=0)){m.textContent=`Enter the amount for ${name} as a number, like 120.`;return}
-        if(kind==="bills"&&!(amt>0)){m.textContent=`Enter how much ${name} costs each month.`;return}
+        if(K.monthly&&!(amt>0)){m.textContent=K.need(name);return}
         let due=null;
-        if(kind==="bills"&&String(r.due??"").trim()!==""){due=parseInt(String(r.due).trim(),10);
-          if(!(due>=1&&due<=31)||!/^\d{1,2}$/.test(String(r.due).trim())){m.textContent=`Enter the day ${name} is due as a number from 1 to 31, or leave it blank.`;return}}
-        out.push(kind==="bills"?(due?{id:r.id||newId(name),name,amount:amt,due}:{id:r.id||newId(name),name,amount:amt}):{id:r.id||newId(name),name,limit:amt,color:r.color||"c5"});
+        if(withDue&&String(r.due??"").trim()!==""){due=parseInt(String(r.due).trim(),10);
+          if(!(due>=1&&due<=31)||!/^\d{1,2}$/.test(String(r.due).trim())){m.textContent=K.dayErr(name);return}}
+        out.push(kind==="cats"?{id:r.id||newId(name),name,limit:amt,color:r.color||"c5"}
+          :(due?{id:r.id||newId(name),name,amount:amt,due}:{id:r.id||newId(name),name,amount:amt}));
       }
       if(!canEdit){m.textContent="Not connected yet, so changes can't be saved.";return}
       t.disabled=true;
@@ -664,10 +725,10 @@ function makeEditor(kind){
       if(kind==="cats") write=budgetRef.child("config/cats").set(out);
       else{
         const mk=keyOf(view);
-        if(scope==="only") write=budgetRef.child("billMonths/"+mk).set({set:true,list:out});
+        if(scope==="only") write=budgetRef.child(K.months+"/"+mk).set({set:true,list:out});
         else{ // this month and after: starts a new plan here, replaces later plans; months edited on their own keep their own list
-          const up={["billPlans/"+mk]:{set:true,list:out},["billMonths/"+mk]:null};
-          Object.keys(state.billPlans).filter(k=>k>mk).forEach(k=>up["billPlans/"+k]=null);
+          const up={[K.plans+"/"+mk]:{set:true,list:out},[K.months+"/"+mk]:null};
+          Object.keys(state[K.plans]||{}).filter(k=>k>mk).forEach(k=>up[K.plans+"/"+k]=null);
           write=budgetRef.update(up);
         }
       }
@@ -803,6 +864,7 @@ function renderYear(){
   $("mtable").innerHTML=rows.filter(r=>!r.future).reverse().map(r=>`<div class="mrow"><span>${MONTHS[r.i]}</span><span class="num${r.budget&&r.total>r.budget?" over":""}">${money(r.total)}</span><small class="num">${r.budget?"of "+money(r.budget):""}</small></div>`).join("")||`<div class="empty">This year hasn't started yet.</div>`;
 }
 function openYear(open){
+  if(open&&typeof incomeOpen!=="undefined"&&incomeOpen)openIncome(false);
   yearOpen=open;document.body.classList.toggle("yearmode",open);$("yearPage").hidden=!open;
   $("graphBtn").setAttribute("aria-pressed",String(open));$("graphBtn").setAttribute("aria-label",open?"Close the year graph":"Open the year graph");
   if(open){yearView=view.getFullYear();renderYear()}
@@ -836,6 +898,57 @@ function pushWidget(){
       spent,spendBudget,cats:catRows,left:billsBudget+spendBudget-billsPaid-spent,dark:document.documentElement.classList.contains("is-dark")}));
   }catch(e){}},400);
 }
+
+
+// ---- Income page ----
+let incomeOpen=false;
+function depositStatus(b){
+  const dd=dueDate(b);if(!dd)return `<span class="bs">Every month</span>`;
+  const t=new Date();t.setHours(0,0,0,0);
+  const days=Math.round((dd-t)/86400000);
+  let txt,cls="";
+  if(days>1)txt=`${days} days until deposit`;
+  else if(days===1){txt="Arrives tomorrow";cls=" soon"}
+  else if(days===0){txt="Arrives today";cls=" got"}
+  else{txt="Received";cls=" got"}
+  return `<span class="bs"><span class="cd${cls}">${txt}</span></span>`;
+}
+function renderIncome(){
+  if(!incomeOpen)return;
+  const mk=keyOf(view), D=incomeFor(mk), B=billsFor(mk), paidMap=state.paid[mk]||{};
+  $("incomeMonth").textContent=view.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+  const income=D.reduce((t,d)=>t+d.amount,0);
+  $("incomeCount").textContent=D.length?`${D.length} deposit${D.length>1?"s":""}`:"";
+  const dueKey=b=>{const dd=dueDate(b);return dd?dd.getDate():99};
+  $("deposits").innerHTML=D.length?[...D].sort((a,b)=>dueKey(a)-dueKey(b)).map(d=>{const dd=dueDate(d);
+    return `<div class="bill dep"><span class="depicon" aria-hidden="true">$</span>
+      <span><span class="bn">${esc(d.name)}</span>${dd?` <span class="due num">${dd<new Date(new Date().setHours(0,0,0,0))?"Got":"Arrives"} ${dd.getMonth()+1}/${dd.getDate()}</span>`:""}${depositStatus(d)}</span>
+      <span class="ba num">${money(d.amount)}</span></div>`}).join("")
+    :`<div class="empty">${canEdit?"No deposits yet. Tap Edit deposits to add your paychecks or other income.":"No deposits yet."}</div>`;
+  // bills: paid amounts plus what's still to pay
+  let billsPaid=0,billsUnpaid=0;
+  B.forEach(b=>{if(paidMap[b.id])billsPaid+=typeof paidMap[b.id]==="number"?paidMap[b.id]:b.amount;else billsUnpaid+=b.amount});
+  Object.keys(paidMap).forEach(id=>{if(!B.some(b=>b.id===id)&&typeof paidMap[id]==="number")billsPaid+=paidMap[id]});
+  const other=state.expenses.reduce((t,e)=>t+((e.date||"").startsWith(mk)?(+e.amount||0):0),0);
+  const total=billsPaid+billsUnpaid+other, left=income-total;
+  $("incomeSummary").innerHTML=`
+    <div class="lrow"><span>Income this month</span><b class="num plus">${money(income)}</b></div>
+    <div class="lrow"><span>Bills, paid and unpaid</span><b class="num">−${money(billsPaid+billsUnpaid)}</b><small class="num">${money(billsPaid)} paid · ${money(billsUnpaid)} still to pay</small></div>
+    <div class="lrow"><span>Everything else spent</span><b class="num">−${money(other)}</b><small>Gas, food and your other categories so far</small></div>
+    <div class="lrow total"><span>Total expenses</span><b class="num">−${money(total)}</b></div>
+    <div class="lrow left"><span>${left<0?"Short by":"Left after expenses"}</span><b class="num${left<0?" neg":""}">${money(Math.abs(left))}</b></div>`;
+}
+function openIncome(open){
+  if(open&&yearOpen)openYear(false);
+  incomeOpen=open;document.body.classList.toggle("incomemode",open);$("incomePage").hidden=!open;
+  $("incomeBtn").setAttribute("aria-pressed",String(open));$("incomeBtn").setAttribute("aria-label",open?"Close the income page":"Open the income page");
+  if(!open)editorClosers.forEach(f=>f());
+  renderIncome();window.scrollTo(0,0);
+}
+$("incomeBtn").onclick=()=>openIncome(!incomeOpen);
+$("iBack").onclick=()=>openIncome(false);
+$("iPrev").onclick=()=>{view.setMonth(view.getMonth()-1);editorClosers.forEach(f=>f());render()};
+$("iNext").onclick=()=>{view.setMonth(view.getMonth()+1);editorClosers.forEach(f=>f());render()};
 
 // ---- Swipe pager ----
 const pager=$("pager"), panes=[$("pane-0"),$("pane-1")];
@@ -884,6 +997,7 @@ function applySnap(snap){
     const d=snap.val()||{};
     state.config=d.config?{bills:asList(d.config.bills),cats:asList(d.config.cats).length?asList(d.config.cats):DEFAULT_CATS}:null;
     state.billMonths=d.billMonths||{};state.billPlans=d.billPlans||{};
+    state.incomeMonths=d.incomeMonths||{};state.incomePlans=d.incomePlans||{};
     state.paid=d.paid||{};
     state.expenses=Object.entries(d.expenses||{}).map(([id,v])=>({id,...v}));
     ready=true;notice("");renderChips();render();
@@ -905,7 +1019,7 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 addEventListener("online",()=>{if(budgetRef)reconnect()});
 
 async function startOwner(){
-  makeEditor("bills");makeEditor("cats");
+  makeEditor("bills");makeEditor("cats");makeEditor("income");
   const auth=firebase.auth();
   await new Promise(r=>{const u=auth.onAuthStateChanged(()=>{u();r()})});
   if(!auth.currentUser){try{await auth.signInAnonymously()}catch{notice("Couldn't connect. Check your internet connection and restart the app.");return}}
