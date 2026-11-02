@@ -184,6 +184,11 @@ body[data-mode="viewer"] .refreshbtn{display:grid}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.refreshbtn.spin svg{animation:none}}
 .updated{font-size:.82rem;color:var(--muted);text-align:center}
+
+.scope{border:0;margin:0;padding:10px 12px;border-radius:10px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.scope legend{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:0;margin-bottom:6px;float:left;width:100%}
+.scope label{display:flex;align-items:center;gap:10px;font-weight:600;cursor:pointer}
+.scope input{width:20px;height:20px;accent-color:var(--accent);margin:0}
 </style>
 </head>
 <body>
@@ -362,10 +367,19 @@ function store(k,v){try{localStorage.setItem(k,v)}catch{}}
 function load(k){try{return localStorage.getItem(k)}catch{return null}}
 
 let view=new Date(); view.setDate(1);
-let state={paid:{},expenses:[],config:null};
+let state={paid:{},expenses:[],config:null,billMonths:{},billPlans:{}};
 let cat="food", budgetRef=null, ready=false, canEdit=false, budgetId=null;
 
-const bills=()=>state.config?.bills||DEFAULT_BILLS;
+const asList=x=>Array.isArray(x)?x.filter(Boolean):Object.values(x||{}).filter(Boolean);
+// Bills can differ by month. A month uses, in order: its own list (edited for that month only),
+// else the most recent "this month and after" list starting on or before it, else the original list.
+function billsFor(mk){
+  const own=state.billMonths[mk]; if(own&&own.set) return asList(own.list);
+  const starts=Object.keys(state.billPlans).filter(k=>k<=mk).sort();
+  if(starts.length) return asList(state.billPlans[starts[starts.length-1]].list);
+  return state.config?asList(state.config.bills):DEFAULT_BILLS;
+}
+const bills=()=>billsFor(keyOf(view));
 const cats=()=>{const c=state.config?.cats||DEFAULT_CATS;return c.some(x=>x.id==="other")?c:[...c,{id:"other",name:"Other",limit:0,color:"other"}]};
 const catColor=c=>`var(--${c.color||"other"})`;
 const catOf=id=>cats().find(c=>c.id===id)||cats().find(c=>c.id==="other");
@@ -443,8 +457,8 @@ function render(){
   $("list").innerHTML=html+"</div>";
 }
 
-$("prev").onclick=()=>{view.setMonth(view.getMonth()-1);render()};
-$("next").onclick=()=>{view.setMonth(view.getMonth()+1);render()};
+$("prev").onclick=()=>{view.setMonth(view.getMonth()-1);editorClosers.forEach(f=>f());render()};
+$("next").onclick=()=>{view.setMonth(view.getMonth()+1);editorClosers.forEach(f=>f());render()};
 let connected=false, pending=0, pendingTimer=null;
 function setLive(on,text){connected=on;$("live").classList.toggle("on",on&&!pending);$("liveText").textContent=pending?"Saving…":text}
 function liveRefresh(){setLive(connected,connected?"Live":"Offline")}
@@ -492,11 +506,13 @@ $("list").addEventListener("click",async e=>{
   try{await saving(budgetRef.child("expenses/"+b.dataset.id).remove())}catch{notice(saveErr)}
 });
 
+const editorClosers=[];
 function makeEditor(kind){
   const box=$(kind==="bills"?"billsEditor":"catsEditor"), btn=$(kind==="bills"?"editBills":"editCats");
   const label=kind==="bills"?"Edit bills":"Edit categories", amtKey=kind==="bills"?"amount":"limit";
-  let draft=null;
+  let draft=null, scope="only";
   const close=()=>{box.hidden=true;btn.textContent=label};
+  editorClosers.push(close);
   function draw(){
     box.innerHTML=`<div class="ehead"><span>${kind==="bills"?"Bill":"Category"}</span><span>${kind==="bills"?"Per month":"Monthly budget"}</span><span></span></div>`+
       draft.map((r,i)=>{const fixed=kind==="cats"&&r.id==="other";
@@ -504,14 +520,19 @@ function makeEditor(kind){
         <input inputmode="decimal" id="${kind}-a-${i}" data-i="${i}" data-f="amt" value="${r[amtKey]===""?"":esc(r[amtKey])}" placeholder="${kind==="bills"?"0.00":"No limit"}" aria-label="Amount">
         <button type="button" class="rm" data-rm="${i}" aria-label="Remove" ${fixed?"disabled":""}>×</button></div>`}).join("")+
       `<button type="button" class="addrow" data-add>+ Add ${kind==="bills"?"a bill":"a category"}</button>
+      ${kind==="bills"?(()=>{const mn=view.toLocaleDateString("en-US",{month:"long"});return `<fieldset class="scope"><legend>Save these bills for</legend>
+        <label><input type="radio" name="billScope" value="only" ${scope==="only"?"checked":""}> ${mn} only</label>
+        <label><input type="radio" name="billScope" value="after" ${scope==="after"?"checked":""}> ${mn} and every month after</label></fieldset>`})():""}
       <div class="emsg" data-msg></div>
       <div class="eactions"><button type="button" class="primary" data-save>Save</button><button type="button" class="ghost" data-cancel>Cancel</button></div>`;
   }
   btn.onclick=()=>{
     if(!box.hidden){close();return}
     draft=(kind==="bills"?bills():cats()).map(r=>({...r,[amtKey]:kind==="cats"&&!r.limit?"":r[amtKey]}));
+    scope="only";
     draw();box.hidden=false;btn.textContent="Close";
   };
+  box.addEventListener("change",e=>{if(e.target.name==="billScope")scope=e.target.value});
   box.addEventListener("input",e=>{const t=e.target;if(t.dataset.i==null)return;const r=draft[+t.dataset.i];
     if(t.dataset.f==="name")r.name=t.value;else r[amtKey]=t.value});
   box.addEventListener("click",async e=>{
@@ -534,7 +555,18 @@ function makeEditor(kind){
       }
       if(!canEdit){m.textContent="Not connected yet, so changes can't be saved.";return}
       t.disabled=true;
-      try{await saving(budgetRef.child("config").set({bills:kind==="bills"?out:bills(),cats:kind==="cats"?out:cats()}));close()}
+      let write;
+      if(kind==="cats") write=budgetRef.child("config/cats").set(out);
+      else{
+        const mk=keyOf(view);
+        if(scope==="only") write=budgetRef.child("billMonths/"+mk).set({set:true,list:out});
+        else{ // this month and after: starts a new plan here, replaces later plans; months edited on their own keep their own list
+          const up={["billPlans/"+mk]:{set:true,list:out},["billMonths/"+mk]:null};
+          Object.keys(state.billPlans).filter(k=>k>mk).forEach(k=>up["billPlans/"+k]=null);
+          write=budgetRef.update(up);
+        }
+      }
+      try{await saving(write);close()}
       catch{m.textContent=saveErr;t.disabled=false}
     }
   });
@@ -624,7 +656,8 @@ function applySnap(snap){
       if(MODE==="viewer"){notice("This budget link doesn't work. Ask the owner to send their QR code again.");setLive(false,"Not found")}
       render();return}
     const d=snap.val()||{};
-    state.config=d.config&&Array.isArray(d.config.bills)&&Array.isArray(d.config.cats)?d.config:null;
+    state.config=d.config?{bills:asList(d.config.bills),cats:asList(d.config.cats).length?asList(d.config.cats):DEFAULT_CATS}:null;
+    state.billMonths=d.billMonths||{};state.billPlans=d.billPlans||{};
     state.paid=d.paid||{};
     state.expenses=Object.entries(d.expenses||{}).map(([id,v])=>({id,...v}));
     ready=true;notice("");renderChips();render();
