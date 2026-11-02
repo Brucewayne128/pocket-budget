@@ -934,12 +934,17 @@ function renderIncome(){
   let billsPaid=0,billsUnpaid=0;
   B.forEach(b=>{if(paidMap[b.id])billsPaid+=typeof paidMap[b.id]==="number"?paidMap[b.id]:b.amount;else billsUnpaid+=b.amount});
   Object.keys(paidMap).forEach(id=>{if(!B.some(b=>b.id===id)&&typeof paidMap[id]==="number")billsPaid+=paidMap[id]});
-  const other=state.expenses.reduce((t,e)=>t+((e.date||"").startsWith(mk)?(+e.amount||0):0),0);
-  const total=billsPaid+billsUnpaid+other, left=income-total;
+  // Everything else: what's spent so far plus what's still left in each category's budget
+  // (a category that's over budget counts what was actually spent).
+  const byCat={};state.expenses.forEach(e=>{if((e.date||"").startsWith(mk)){const c=catOf(e.category).id;byCat[c]=(byCat[c]||0)+(+e.amount||0)}});
+  let other=0,unspent=0;
+  cats().forEach(c=>{const sp=byCat[c.id]||0,lim=+c.limit||0;other+=sp;if(lim>sp)unspent+=lim-sp});
+  const everything=other+unspent;
+  const total=billsPaid+billsUnpaid+everything, left=income-total;
   $("incomeSummary").innerHTML=`
     <div class="lrow"><span>Income this month</span><b class="num plus">${money(income)}</b></div>
     <div class="lrow"><span>Bills, paid and unpaid</span><b class="num">−${money(billsPaid+billsUnpaid)}</b><small class="num">${money(billsPaid)} paid · ${money(billsUnpaid)} still to pay</small></div>
-    <div class="lrow"><span>Everything else spent</span><b class="num">−${money(other)}</b><small>Gas, food and your other categories so far</small></div>
+    <div class="lrow"><span>Everything else, spent and unspent</span><b class="num">−${money(everything)}</b><small class="num">${money(other)} spent · ${money(unspent)} still left in your budgets</small></div>
     <div class="lrow total"><span>Total expenses</span><b class="num">−${money(total)}</b></div>
     <div class="lrow left"><span>${left<0?"Short by":"Left after expenses"}</span><b class="num${left<0?" neg":""}">${money(Math.abs(left))}</b></div>`;
 }
