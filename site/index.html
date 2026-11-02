@@ -321,15 +321,12 @@ body[data-mode="landing"] .live{visibility:hidden}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 // ---------- Pocket Budget: owner app (inside the Android app) + read-only live viewer ----------
-const DEFAULT_BILLS=[
-  {id:"storage",name:"Storage unit",amount:320},
-  {id:"phone",name:"Phone",amount:100},
-  {id:"brittany",name:"Brittany",amount:300},
-  {id:"carins",name:"Car insurance",amount:169}];
+// A brand-new budget starts empty: no bills, and starter categories with no budget amounts.
+// Each person adds their own with "Edit bills" and "Edit categories".
+const DEFAULT_BILLS=[];
 const DEFAULT_CATS=[
-  {id:"gas",name:"Gas",limit:200,color:"gas"},
-  {id:"food",name:"Food",limit:600,color:"food"},
-  {id:"dispensary",name:"Dispensary",limit:200,color:"disp"},
+  {id:"gas",name:"Gas",limit:0,color:"gas"},
+  {id:"food",name:"Food",limit:0,color:"food"},
   {id:"other",name:"Other",limit:0,color:"other"}];
 const PALETTE=["gas","food","disp","c5","c6","c7","c8","bills"];
 
@@ -357,7 +354,7 @@ let state={paid:{},expenses:[],config:null};
 let cat="food", budgetRef=null, ready=false, canEdit=false, budgetId=null;
 
 const bills=()=>state.config?.bills||DEFAULT_BILLS;
-const cats=()=>{const c=state.config?.cats||DEFAULT_CATS;return c.some(x=>x.id==="other")?c:[...c,DEFAULT_CATS[3]]};
+const cats=()=>{const c=state.config?.cats||DEFAULT_CATS;return c.some(x=>x.id==="other")?c:[...c,{id:"other",name:"Other",limit:0,color:"other"}]};
 const catColor=c=>`var(--${c.color||"other"})`;
 const catOf=id=>cats().find(c=>c.id===id)||cats().find(c=>c.id==="other");
 
@@ -387,7 +384,7 @@ function render(){
   $("left").textContent=money(Math.abs(left));
   $("left").classList.toggle("over",left<0);
   $("leftLabel").textContent=left<0?"Over budget by":"Left this month";
-  $("ofBudget").textContent=`${money(spent)} spent of ${money(TOTAL)} budget`;
+  $("ofBudget").textContent=TOTAL?`${money(spent)} spent of ${money(TOTAL)} budget`:(canEdit?"Set up your budget with Edit bills and Edit categories.":`${money(spent)} spent`);
   setBar("totalBar",spent,TOTAL);
   $("billsTotal").textContent=money(billsPaid);
   $("billsOf").textContent=`of ${money(BILLS_BUDGET)}`;
@@ -405,7 +402,7 @@ function render(){
   $("bills").innerHTML=B.length?B.map(b=>`<label class="bill${paidMap[b.id]?" paid":""}" for="bill-${esc(b.id)}">
     <input type="checkbox" id="bill-${esc(b.id)}" data-bill="${esc(b.id)}" ${paidMap[b.id]?"checked":""} ${canEdit?"":"disabled"}>
     <span><span class="bn">${esc(b.name)}</span><span class="bs">${paidMap[b.id]?"Paid this month":"Not paid yet"}</span></span>
-    <span class="ba num">${money(paidMap[b.id]?paidAmount(paidMap,b.id):b.amount)}</span></label>`).join(""):`<div class="empty">No bills yet.</div>`;
+    <span class="ba num">${money(paidMap[b.id]?paidAmount(paidMap,b.id):b.amount)}</span></label>`).join(""):`<div class="empty">${canEdit?"No bills yet. Tap Edit bills to add your monthly bills.":"No bills yet."}</div>`;
   setBar("billsBar2",billsPaid,BILLS_BUDGET);
   $("billsSum").innerHTML=`${money(billsPaid)} <small>of ${money(BILLS_BUDGET)}</small>`;
   $("billsLeft").textContent=B.length&&nPaid===B.length?"All bills paid this month":`${money(Math.max(BILLS_BUDGET-billsPaid,0))} still to pay`;

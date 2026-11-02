@@ -61,7 +61,7 @@ Every upload starts a build automatically. Open the **Actions** tab in your repo
 
 ## Using it
 
-- Every phone that installs the app gets its **own separate budget**, starting with your four bills plus Gas $200, Food $600 and Dispensary $200. Each person can change their own bills and categories.
+- Every phone that installs the app gets its **own separate, empty budget**: no bills, no expenses, and Gas, Food and Other categories with no amounts set. Each person adds their own bills and budgets with **Edit bills** and **Edit categories**.
 - At the bottom of the **Everything else** page is that phone's **QR code**. Anyone who scans it with an iPhone or Android camera sees that budget live, but **can't change anything**.
 - **Send the link** texts the same view-only link.
 - Only the phone that created a budget can edit it.
