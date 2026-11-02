@@ -9,6 +9,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -29,6 +32,7 @@ public class MainActivity extends Activity {
     private String appUrl;
     private int insetTop = 0, insetBottom = 0;
     private boolean darkBars = false;
+    private boolean navHidden = false;
 
     private static final String OFFLINE_PAGE =
         "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
@@ -45,11 +49,11 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         appUrl = getString(R.string.app_url);
 
-        goEdgeToEdge();
-
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#EEF1F4"));
         setContentView(web);
+        // After setContentView, so the window theme can't put the white layer back.
+        goEdgeToEdge();
 
         // Tell the page how tall the status bar and the bottom button bar are,
         // so it can draw behind them but keep its content clear of them.
@@ -104,8 +108,12 @@ public class MainActivity extends Activity {
     @SuppressWarnings("deprecation")
     private void goEdgeToEdge() {
         Window w = getWindow();
+        w.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
+            | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+        w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         w.setStatusBarColor(Color.TRANSPARENT);
         w.setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= 28) w.setNavigationBarDividerColor(Color.TRANSPARENT);
         if (Build.VERSION.SDK_INT >= 29) {
             w.setNavigationBarContrastEnforced(false);
             w.setStatusBarContrastEnforced(false);
@@ -137,6 +145,46 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Slide the bottom button bar away while scrolling, and back at the top. */
+    @SuppressWarnings("deprecation")
+    private void applyNavHidden() {
+        Window w = getWindow();
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = w.getInsetsController();
+            if (c == null) return;
+            c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            if (navHidden) c.hide(WindowInsets.Type.navigationBars());
+            else c.show(WindowInsets.Type.navigationBars());
+        } else {
+            View d = w.getDecorView();
+            int flags = d.getSystemUiVisibility();
+            int hide = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            d.setSystemUiVisibility(navHidden ? (flags | hide) : (flags & ~hide));
+        }
+    }
+
+    private boolean navHidden = false;
+
+    @SuppressWarnings("deprecation")
+    private void setNavBarHidden(boolean hide) {
+        if (hide == navHidden) return;
+        navHidden = hide;
+        Window w = getWindow();
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = w.getInsetsController();
+            if (c == null) return;
+            // The system slides the bar down and back up; a swipe up from the bottom also shows it.
+            c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            if (hide) c.hide(WindowInsets.Type.navigationBars());
+            else c.show(WindowInsets.Type.navigationBars());
+        } else {
+            View d = w.getDecorView();
+            int f = d.getSystemUiVisibility();
+            int hideFlags = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            d.setSystemUiVisibility(hide ? (f | hideFlags) : (f & ~hideFlags));
+        }
+    }
+
     private void pushInsets() {
         if (web == null) return;
         float density = getResources().getDisplayMetrics().density;
@@ -159,6 +207,13 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        goEdgeToEdge();
+        applyNavHidden();
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
         CookieManager.getInstance().flush();
@@ -177,6 +232,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setDarkBars(boolean dark) {
             runOnUiThread(() -> { darkBars = dark; applyBarIcons(); });
+        }
+
+        @JavascriptInterface
+        public void setNavHidden(boolean hidden) {
+            runOnUiThread(() -> {
+                if (navHidden == hidden) return;
+                navHidden = hidden;
+                applyNavHidden();
+            });
+        }
+
+        /** Slide the bottom buttons away (true) or bring them back (false). */
+        @JavascriptInterface
+        public void setNavHidden(boolean hide) {
+            runOnUiThread(() -> setNavBarHidden(hide));
         }
 
         @JavascriptInterface

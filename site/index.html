@@ -515,6 +515,17 @@ function makeEditor(kind){
   sync();
 })();
 
+
+// ---- Bottom buttons: slide away when scrolling down, back at the very top (Android app only) ----
+(function(){
+  if(!(window.Android&&Android.setNavHidden))return;
+  let hidden=false,ticking=false;
+  function check(){ticking=false;const y=window.scrollY||document.documentElement.scrollTop||0;
+    if(!hidden&&y>40){hidden=true;try{Android.setNavHidden(true)}catch{}}
+    else if(hidden&&y<=2){hidden=false;try{Android.setNavHidden(false)}catch{}}}
+  addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(check)}},{passive:true});
+})();
+
 // ---- Swipe pager ----
 const pager=$("pager"), panes=[$("pane-0"),$("pane-1")];
 let page=0;
