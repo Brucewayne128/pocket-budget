@@ -224,7 +224,7 @@ body.yearmode .wrap>*:not(header):not(#yearPage):not(.viewbanner):not(.notice){d
 .backbtn{align-self:center}
 
 header{flex-wrap:nowrap}
-header h1{font-size:clamp(1.05rem,5.2vw,1.35rem);white-space:nowrap;min-width:0}
+header h1{font-size:clamp(1.05rem,5.2vw,1.35rem);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .hdr-right{gap:8px;flex:none}
 .hdr-right .themebtn{width:36px;height:36px}
 @media (max-width:400px){.live{font-size:.7rem;letter-spacing:.03em}}
@@ -253,7 +253,12 @@ body.incomemode .wrap>*:not(header):not(#incomePage):not(.viewbanner):not(.notic
 .lrow.left span{font-family:var(--display);font-size:1.1rem}
 .lrow.left b{font-family:var(--display);font-size:1.7rem;font-weight:800}
 .lrow.left b.neg{color:var(--bad)}
-@media (max-width:420px){.live.on #liveText{display:none}}
+
+
+body[data-mode="viewer"] header h1{font-size:clamp(.98rem,4.7vw,1.35rem)}
+body[data-mode="viewer"] .hdr-right{gap:6px}
+body[data-mode="viewer"] .hdr-right .themebtn{width:34px;height:34px}
+@media (max-width:370px){body[data-mode="viewer"] header h1{font-size:.9rem}body[data-mode="viewer"] .hdr-right{gap:4px}}
 </style>
 </head>
 <body>
