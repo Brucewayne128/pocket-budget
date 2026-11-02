@@ -163,28 +163,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean navHidden = false;
-
-    @SuppressWarnings("deprecation")
-    private void setNavBarHidden(boolean hide) {
-        if (hide == navHidden) return;
-        navHidden = hide;
-        Window w = getWindow();
-        if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController c = w.getInsetsController();
-            if (c == null) return;
-            // The system slides the bar down and back up; a swipe up from the bottom also shows it.
-            c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-            if (hide) c.hide(WindowInsets.Type.navigationBars());
-            else c.show(WindowInsets.Type.navigationBars());
-        } else {
-            View d = w.getDecorView();
-            int f = d.getSystemUiVisibility();
-            int hideFlags = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-            d.setSystemUiVisibility(hide ? (f | hideFlags) : (f & ~hideFlags));
-        }
-    }
-
     private void pushInsets() {
         if (web == null) return;
         float density = getResources().getDisplayMetrics().density;
@@ -241,12 +219,6 @@ public class MainActivity extends Activity {
                 navHidden = hidden;
                 applyNavHidden();
             });
-        }
-
-        /** Slide the bottom buttons away (true) or bring them back (false). */
-        @JavascriptInterface
-        public void setNavHidden(boolean hide) {
-            runOnUiThread(() -> setNavBarHidden(hide));
         }
 
         @JavascriptInterface
