@@ -163,6 +163,7 @@ body[data-mode="viewer"] #addForm,body[data-mode="viewer"] .editbtn,body[data-mo
 body[data-mode="landing"] .wrap>*:not(header):not(#landing){display:none !important}
 body[data-mode="landing"] #landing{display:flex}
 body[data-mode="landing"] .live{visibility:hidden}
+body[data-mode="landing"] .graphbtn{display:none}
 
 .hdr-right{display:flex;align-items:center;gap:12px}
 .themebtn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:grid;place-items:center;padding:0}
@@ -189,6 +190,44 @@ body[data-mode="viewer"] .refreshbtn{display:grid}
 .scope legend{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:0;margin-bottom:6px;float:left;width:100%}
 .scope label{display:flex;align-items:center;gap:10px;font-weight:600;cursor:pointer}
 .scope input{width:20px;height:20px;accent-color:var(--accent);margin:0}
+
+.graphbtn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+body.yearmode .wrap>*:not(header):not(#yearPage):not(.viewbanner):not(.notice){display:none !important}
+.yearpage{display:flex;flex-direction:column;gap:18px}
+.charttabs{grid-template-columns:1fr 1fr 1fr;position:static}
+.chartbox{position:relative;width:100%}
+.chartbox svg{display:block;width:100%;height:auto;overflow:visible}
+.chartbox .gridl{stroke:var(--line);stroke-width:1}
+.chartbox .axt{fill:var(--muted);font-size:10px;font-family:var(--body)}
+.chartbox .axt.cur{fill:var(--ink);font-weight:700}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:6px 9px;font-size:.8rem;line-height:1.3;white-space:nowrap;transform:translate(-50%,-100%);margin-top:-8px;z-index:2}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.85rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.legend i.dash{height:0;border-top:2px dashed var(--muted);border-radius:0;width:16px}
+.legend i.ln{height:3px;border-radius:2px}
+.pielist{display:flex;flex-direction:column;gap:8px;width:100%}
+.pierow{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;font-size:.92rem}
+.pierow i{width:12px;height:12px;border-radius:3px}
+.pierow b{font-weight:700}
+.pierow small{color:var(--muted);min-width:3.2em;text-align:right}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fact{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.fact b{font-family:var(--display);font-size:1.25rem;font-weight:800}
+.fact small{color:var(--muted);font-size:.82rem}
+.fact.wide{grid-column:1/-1}
+.mtable{display:flex;flex-direction:column}
+.mrow{display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.92rem;align-items:baseline}
+.mrow:last-child{border-bottom:0}
+.mrow small{color:var(--muted)}
+.mrow .over{color:var(--bad);font-weight:600}
+.backbtn{align-self:center}
+
+header{flex-wrap:nowrap}
+header h1{font-size:clamp(1.05rem,5.2vw,1.35rem);white-space:nowrap;min-width:0}
+.hdr-right{gap:8px;flex:none}
+.hdr-right .themebtn{width:36px;height:36px}
+@media (max-width:400px){.live{font-size:.7rem;letter-spacing:.03em}}
 </style>
 </head>
 <body>
@@ -196,6 +235,9 @@ body[data-mode="viewer"] .refreshbtn{display:grid}
   <header>
     <h1>Pocket Budget</h1>
     <div class="hdr-right">
+      <button type="button" class="themebtn graphbtn" id="graphBtn" aria-label="Open the year graph" aria-pressed="false" title="Year graph">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5.5" y="11" width="3" height="7" rx="1" fill="currentColor"/><rect x="10.5" y="6" width="3" height="12" rx="1" fill="currentColor"/><rect x="15.5" y="13" width="3" height="5" rx="1" fill="currentColor"/></svg>
+      </button>
       <span class="live" id="live"><span class="dot"></span><span id="liveText">Connecting</span></span>
       <button type="button" class="themebtn refreshbtn" id="refreshBtn" aria-label="Refresh" title="Refresh">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -323,6 +365,33 @@ body[data-mode="viewer"] .refreshbtn{display:grid}
     </div></div>
   </section>
 
+  <section id="yearPage" class="yearpage" hidden>
+    <div class="month">
+      <button class="iconbtn" id="yPrev" aria-label="Previous year">‹</button>
+      <h2 id="yearName">2026</h2>
+      <button class="iconbtn" id="yNext" aria-label="Next year">›</button>
+    </div>
+    <div class="tabs charttabs" role="tablist" aria-label="Graph type">
+      <button class="tab" role="tab" data-chart="line" aria-selected="true">Line</button>
+      <button class="tab" role="tab" data-chart="bar" aria-selected="false">Bar</button>
+      <button class="tab" role="tab" data-chart="pie" aria-selected="false">Pie</button>
+    </div>
+    <section class="card">
+      <div class="cardhead"><h3 id="chartTitle">Spent each month</h3><span id="chartSub"></span></div>
+      <div class="chartbox" id="chartBox"></div>
+      <div class="legend" id="chartLegend"></div>
+    </section>
+    <section class="card">
+      <h3>Year details</h3>
+      <div class="facts" id="facts"></div>
+    </section>
+    <section class="card">
+      <h3>Month by month</h3>
+      <div class="mtable" id="mtable"></div>
+    </section>
+    <button type="button" class="ghost backbtn" id="yBack">← Back to this month</button>
+  </section>
+
   <section class="card" id="landing">
     <h3>Pocket Budget</h3>
     <p class="sub">Pocket Budget is an Android app. To see someone's budget, scan the QR code inside their app.</p>
@@ -395,6 +464,7 @@ function setBar(id,v,of){const el=$(id);el.style.width=pct(v,of)+"%";el.classLis
 function paidAmount(month,billId){const v=month[billId];if(typeof v==="number")return v;if(v){const b=bills().find(x=>x.id===billId);return b?b.amount:0}return 0}
 
 function render(){
+  try{renderYear()}catch{}
   const mk=keyOf(view), B=bills(), C=cats();
   const BILLS_BUDGET=B.reduce((s,b)=>s+b.amount,0), SPEND_BUDGET=C.reduce((s,c)=>s+(+c.limit||0),0), TOTAL=BILLS_BUDGET+SPEND_BUDGET;
   $("monthName").textContent=view.toLocaleDateString("en-US",{month:"long",year:"numeric"});
@@ -611,11 +681,109 @@ function collapsible(btnId,bodyId,key,openByDefault,label){
 collapsible("shareToggle","shareBody","pb_share_open",false,"the share section");
 collapsible("addToggle","addBody","pb_add_open",true,"the add an expense section");
 
+
+// ---- Year graph page ----
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let yearView=new Date().getFullYear(), chartType="line", yearOpen=false;
+try{const c=localStorage.getItem("pb_chart");if(["line","bar","pie"].includes(c))chartType=c}catch{}
+function monthTotals(mk){
+  const B=billsFor(mk), paidMap=state.paid[mk]||{};
+  const bills=Object.keys(paidMap).reduce((t,id)=>{const v=paidMap[id];return t+(typeof v==="number"?v:(v?((B.find(b=>b.id===id)||{}).amount||0):0))},0);
+  const byCat={};let other=0;
+  state.expenses.forEach(e=>{if((e.date||"").startsWith(mk)){const a=+e.amount||0;other+=a;const c=catOf(e.category).id;byCat[c]=(byCat[c]||0)+a}});
+  const budget=B.reduce((t,b)=>t+b.amount,0)+cats().reduce((t,c)=>t+(+c.limit||0),0);
+  return {bills,other,total:bills+other,budget,byCat};
+}
+const short=n=>n>=1000?"$"+(n/1000).toFixed(n%1000===0?0:1)+"k":"$"+Math.round(n);
+function niceMax(v){if(v<=0)return 100;const p=Math.pow(10,Math.floor(Math.log10(v)));for(const m of [1,1.5,2,2.5,3,4,5,6,8,10])if(m*p>=v)return m*p;return 10*p}
+function renderYear(){
+  if(!yearOpen)return;
+  $("yearName").textContent=yearView;
+  document.querySelectorAll(".charttabs .tab").forEach(t=>t.setAttribute("aria-selected",String(t.dataset.chart===chartType)));
+  const now=new Date(), curKey=keyOf(now);
+  const rows=MONTHS.map((m,i)=>{const mk=yearView+"-"+pad(i+1);return {i,m,mk,...monthTotals(mk),future:mk>curKey}});
+  const box=$("chartBox"), legend=$("chartLegend");
+  const yearTotal=rows.reduce((t,r)=>t+r.total,0);
+  if(chartType==="pie"){
+    $("chartTitle").textContent="Where the money went";
+    $("chartSub").textContent=money(yearTotal);
+    const parts=[{name:"Bills",color:"var(--bills)",v:rows.reduce((t,r)=>t+r.bills,0)}].concat(cats().map(c=>({name:c.name,color:catColor(c),v:rows.reduce((t,r)=>t+(r.byCat[c.id]||0),0)}))).filter(p=>p.v>0);
+    legend.innerHTML="";
+    if(!yearTotal){box.innerHTML=`<div class="empty">Nothing spent in ${yearView} yet.</div>`;return}
+    const R=90,cx=110,cy=110;let a=-Math.PI/2,paths="";
+    parts.forEach((p,k)=>{const frac=p.v/yearTotal,a2=a+frac*Math.PI*2;
+      if(frac>=0.9999)paths+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="${p.color}" data-k="${k}"/>`;
+      else{const x1=cx+R*Math.cos(a),y1=cy+R*Math.sin(a),x2=cx+R*Math.cos(a2),y2=cy+R*Math.sin(a2);
+        paths+=`<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${R},${R} 0 ${frac>.5?1:0} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${p.color}" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round" data-k="${k}"/>`}
+      a=a2});
+    box.innerHTML=`<svg viewBox="0 0 220 220" style="max-width:240px;margin:0 auto" role="img" aria-label="Spending by category for ${yearView}">${paths}<circle cx="${cx}" cy="${cy}" r="46" fill="var(--surface)"/><text x="${cx}" y="${cy-4}" text-anchor="middle" class="axt">${yearView}</text><text x="${cx}" y="${cy+14}" text-anchor="middle" style="fill:var(--ink);font:800 15px var(--display)">${short(yearTotal)}</text></svg>
+      <div class="pielist">${parts.map(p=>`<div class="pierow"><i style="background:${p.color}"></i><span>${esc(p.name)}</span><b class="num">${money(p.v)}</b><small class="num">${Math.round(p.v/yearTotal*100)}%</small></div>`).join("")}</div>`;
+    box.style.display="flex";box.style.flexDirection="column";box.style.gap="14px";
+  }else{
+    box.style.display="";
+    $("chartTitle").textContent="Spent each month";
+    $("chartSub").textContent=money(yearTotal)+" this year";
+    const W=360,H=230,L=44,Rm=8,T=12,Bm=24,pw=W-L-Rm,ph=H-T-Bm;
+    const shown=rows.filter(r=>!r.future);
+    const max=niceMax(Math.max(...rows.map(r=>Math.max(r.total,r.budget)),1));
+    const x=i=>L+pw*(i+.5)/12, y=v=>T+ph-(v/max)*ph, step=pw/12;
+    let g="";
+    for(let k=0;k<=4;k++){const v=max*k/4,yy=y(v);g+=`<line class="gridl" x1="${L}" x2="${W-Rm}" y1="${yy}" y2="${yy}"/><text class="axt num" x="${L-6}" y="${yy+3}" text-anchor="end">${short(v)}</text>`}
+    rows.forEach(r=>g+=`<text class="axt${r.mk===curKey?" cur":""}" x="${x(r.i)}" y="${H-6}" text-anchor="middle">${r.m}</text>`);
+    // budget reference
+    const bpts=rows.filter(r=>r.budget>0).map(r=>`${x(r.i)},${y(r.budget)}`);
+    let marks="";
+    if(chartType==="bar"){
+      const bw=Math.max(6,step*.58);
+      shown.forEach(r=>{if(r.total<=0)return;const h=Math.max(ph*r.total/max,2),yy=T+ph-h,rr=Math.min(4,h/2),x0=x(r.i)-bw/2;
+        marks+=`<path d="M${x0},${T+ph} V${yy+rr} Q${x0},${yy} ${x0+rr},${yy} H${x0+bw-rr} Q${x0+bw},${yy} ${x0+bw},${yy+rr} V${T+ph} Z" fill="${r.total>r.budget&&r.budget?"var(--bad)":"var(--accent)"}"/>`});
+    }else{
+      if(shown.length){const pts=shown.map(r=>`${x(r.i)},${y(r.total)}`).join(" ");
+        marks+=`<polygon points="${x(shown[0].i)},${T+ph} ${pts} ${x(shown[shown.length-1].i)},${T+ph}" fill="var(--accent)" opacity=".10"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+        shown.forEach(r=>marks+=`<circle cx="${x(r.i)}" cy="${y(r.total)}" r="${r.mk===curKey?5:4}" fill="${r.total>r.budget&&r.budget?"var(--bad)":"var(--accent)"}" stroke="var(--surface)" stroke-width="2"/>`)}
+    }
+    const budgetLine=bpts.length?`<polyline points="${bpts.join(" ")}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>`:"";
+    const hits=rows.map(r=>`<rect x="${x(r.i)-step/2}" y="${T}" width="${step}" height="${ph}" fill="transparent" data-i="${r.i}"/>`).join("");
+    box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Amount spent each month of ${yearView}">${g}${budgetLine}${marks}<line x1="${L}" x2="${W-Rm}" y1="${T+ph}" y2="${T+ph}" stroke="var(--muted)" stroke-width="1"/>${hits}</svg><div class="tip" id="tip" hidden></div>`;
+    legend.innerHTML=`<span><i class="${chartType==="line"?"ln":""}" style="background:var(--accent)"></i>Spent</span><span><i class="dash"></i>Budget</span><span><i style="background:var(--bad)"></i>Over budget</span>`;
+    const svg=box.querySelector("svg"), tip=$("tip");
+    const show=ev=>{const t=ev.target.closest("rect[data-i]");if(!t){tip.hidden=true;return}
+      const r=rows[+t.dataset.i], bb=svg.getBoundingClientRect(), sc=bb.width/W;
+      tip.innerHTML=`<b>${r.m} ${yearView}</b><br>${r.future?"Not here yet":"Spent "+money(r.total)}${r.budget?"<br>Budget "+money(r.budget):""}`;
+      tip.style.left=(x(r.i)*sc)+"px";tip.style.top=((r.future?y(0):y(Math.max(r.total,0)))*sc)+"px";tip.hidden=false};
+    svg.addEventListener("pointermove",show);svg.addEventListener("pointerdown",show);svg.addEventListener("pointerleave",()=>tip.hidden=true);
+  }
+  // facts
+  const withSpend=rows.filter(r=>!r.future&&r.total>0);
+  const most=withSpend.reduce((a,r)=>!a||r.total>a.total?r:a,null), least=withSpend.reduce((a,r)=>!a||r.total<a.total?r:a,null);
+  const avg=withSpend.length?yearTotal/withSpend.length:0, over=rows.filter(r=>!r.future&&r.budget&&r.total>r.budget).length;
+  const billsYear=rows.reduce((t,r)=>t+r.bills,0);
+  $("facts").innerHTML=withSpend.length?`
+    <div class="fact"><span class="label">Most spent</span><b class="num">${money(most.total)}</b><small>${MONTHS[most.i]} ${yearView}</small></div>
+    <div class="fact"><span class="label">Least spent</span><b class="num">${money(least.total)}</b><small>${MONTHS[least.i]} ${yearView}</small></div>
+    <div class="fact"><span class="label">Monthly average</span><b class="num">${money(avg)}</b><small>over ${withSpend.length} month${withSpend.length>1?"s":""} with spending</small></div>
+    <div class="fact"><span class="label">Over budget</span><b class="num">${over}</b><small>month${over===1?"":"s"} this year</small></div>
+    <div class="fact wide"><span class="label">Total for ${yearView}</span><b class="num">${money(yearTotal)}</b><small>${money(billsYear)} bills · ${money(yearTotal-billsYear)} everything else</small></div>`
+    :`<div class="empty fact wide">No spending recorded in ${yearView} yet.</div>`;
+  $("mtable").innerHTML=rows.filter(r=>!r.future).reverse().map(r=>`<div class="mrow"><span>${MONTHS[r.i]}</span><span class="num${r.budget&&r.total>r.budget?" over":""}">${money(r.total)}</span><small class="num">${r.budget?"of "+money(r.budget):""}</small></div>`).join("")||`<div class="empty">This year hasn't started yet.</div>`;
+}
+function openYear(open){
+  yearOpen=open;document.body.classList.toggle("yearmode",open);$("yearPage").hidden=!open;
+  $("graphBtn").setAttribute("aria-pressed",String(open));$("graphBtn").setAttribute("aria-label",open?"Close the year graph":"Open the year graph");
+  if(open){yearView=view.getFullYear();renderYear()}
+  window.scrollTo(0,0);
+}
+$("graphBtn").onclick=()=>openYear(!yearOpen);
+$("yBack").onclick=()=>openYear(false);
+$("yPrev").onclick=()=>{yearView--;renderYear()};
+$("yNext").onclick=()=>{yearView++;renderYear()};
+document.querySelector(".charttabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(!t)return;chartType=t.dataset.chart;try{localStorage.setItem("pb_chart",chartType)}catch{}renderYear()});
+
 // ---- Swipe pager ----
 const pager=$("pager"), panes=[$("pane-0"),$("pane-1")];
 let page=0;
 function fitPager(){pager.style.height=panes[page].offsetHeight+"px"}
-function setPage(p){page=p;document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",String(+t.dataset.page===p)));fitPager()}
+function setPage(p){page=p;document.querySelectorAll(".tab[data-page]").forEach(t=>t.setAttribute("aria-selected",String(+t.dataset.page===p)));fitPager()}
 document.querySelector(".tabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(!t)return;
   const p=+t.dataset.page;setPage(p);pager.scrollTo({left:panes[p].offsetLeft-panes[0].offsetLeft,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"})});
 let st;pager.addEventListener("scroll",()=>{clearTimeout(st);st=setTimeout(()=>{const p=Math.round(pager.scrollLeft/pager.clientWidth);if(p!==page)setPage(p)},60)},{passive:true});
