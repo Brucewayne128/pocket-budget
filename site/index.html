@@ -535,6 +535,10 @@ $("chips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)
   document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x.dataset.cat===cat));});
 $("date").value=todayISO();
 function setBar(id,v,of){const el=$(id);el.style.width=pct(v,of)+"%";el.classList.toggle("over",of>0&&v>of)}
+// Paid total for a month: only checkmarks on bills that are in that month's list count
+// (a checkmark left over from a bill that was removed or re-added does not).
+function paidTotal(mk){const B=billsFor(mk),m=state.paid[mk]||{};
+  return B.reduce((t,b)=>{const v=m[b.id];return t+(typeof v==="number"?v:(v?b.amount:0))},0)}
 function paidAmount(month,billId){const v=month[billId];if(typeof v==="number")return v;if(v){const b=bills().find(x=>x.id===billId);return b?b.amount:0}return 0}
 
 
@@ -565,7 +569,7 @@ function render(){
   const BILLS_BUDGET=B.reduce((s,b)=>s+b.amount,0), SPEND_BUDGET=C.reduce((s,c)=>s+(+c.limit||0),0), TOTAL=BILLS_BUDGET+SPEND_BUDGET;
   $("monthName").textContent=view.toLocaleDateString("en-US",{month:"long",year:"numeric"});
   const paidMap=state.paid[mk]||{};
-  const billsPaid=Object.keys(paidMap).reduce((s,k)=>s+paidAmount(paidMap,k),0);
+  const billsPaid=paidTotal(mk);
   const nPaid=B.filter(b=>paidMap[b.id]).length;
   const items=state.expenses.filter(e=>(e.date||"").startsWith(mk))
     .sort((a,b)=>b.date.localeCompare(a.date)||(b.created||0)-(a.created||0));
@@ -804,7 +808,7 @@ let yearView=new Date().getFullYear(), chartType="line", yearOpen=false;
 try{const c=localStorage.getItem("pb_chart");if(["line","bar","pie"].includes(c))chartType=c}catch{}
 function monthTotals(mk){
   const B=billsFor(mk), paidMap=state.paid[mk]||{};
-  const bills=Object.keys(paidMap).reduce((t,id)=>{const v=paidMap[id];return t+(typeof v==="number"?v:(v?((B.find(b=>b.id===id)||{}).amount||0):0))},0);
+  const bills=paidTotal(mk);
   const byCat={};let other=0;
   state.expenses.forEach(e=>{if((e.date||"").startsWith(mk)){const a=+e.amount||0;other+=a;const c=catOf(e.category).id;byCat[c]=(byCat[c]||0)+a}});
   const budget=B.reduce((t,b)=>t+b.amount,0)+cats().reduce((t,c)=>t+(+c.limit||0),0);
@@ -908,7 +912,7 @@ function pushWidget(){
     const billRows=B.map(b=>{const pd=!!paidMap[b.id], d=parseInt(b.due,10);
       return {name:b.name,amount:b.amount,due:(d>=1&&d<=31)?d:0,paid:pd,paidAmount:pd?(typeof paidMap[b.id]==="number"?paidMap[b.id]:b.amount):0}})
       .sort((a,b)=>(a.due||99)-(b.due||99));
-    const billsPaid=Object.keys(paidMap).reduce((t,id)=>{const v=paidMap[id];return t+(typeof v==="number"?v:(v?((B.find(b=>b.id===id)||{}).amount||0):0))},0);
+    const billsPaid=paidTotal(mk);
     const by={};C.forEach(c=>by[c.id]=0);let spent=0;
     state.expenses.forEach(e=>{if((e.date||"").startsWith(mk)){const a=+e.amount||0;spent+=a;by[catOf(e.category).id]+=a}});
     const catRows=C.map(c=>({name:c.name,spent:by[c.id]||0,limit:+c.limit||0,color:hex(c.color)}));
@@ -948,7 +952,6 @@ function renderIncome(){
   // bills: paid amounts plus what's still to pay
   let billsPaid=0,billsUnpaid=0;
   B.forEach(b=>{if(paidMap[b.id])billsPaid+=typeof paidMap[b.id]==="number"?paidMap[b.id]:b.amount;else billsUnpaid+=b.amount});
-  Object.keys(paidMap).forEach(id=>{if(!B.some(b=>b.id===id)&&typeof paidMap[id]==="number")billsPaid+=paidMap[id]});
   // Everything else: what's spent so far plus what's still left in each category's budget
   // (a category that's over budget counts what was actually spent).
   const byCat={};state.expenses.forEach(e=>{if((e.date||"").startsWith(mk)){const c=catOf(e.category).id;byCat[c]=(byCat[c]||0)+(+e.amount||0)}});
