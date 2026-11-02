@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Pocket Budget</string>
+    <string name="widget_desc">This month\'s bills and spending, view only</string>
+    <string name="widget_tab_bills">Bills</string>
+    <string name="widget_tab_else">Everything else</string>
+    <string name="widget_empty">Open Pocket Budget once to show your budget here.</string>
 </resources>

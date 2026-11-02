@@ -1,0 +1,160 @@
+package com.pocketbudget.app;
+
+import android.app.PendingIntent;
+import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetProvider;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Build;
+import android.widget.RemoteViews;
+
+import org.json.JSONObject;
+
+import java.text.NumberFormat;
+import java.util.Calendar;
+import java.util.Locale;
+
+/**
+ * Home-screen widget: this month's bills (tab 1) and everything else (tab 2).
+ * View only. The app sends it fresh numbers every time something changes.
+ */
+public class BudgetWidget extends AppWidgetProvider {
+
+    static final String PREFS = "pocket_widget";
+    static final String KEY_DATA = "data";
+    static final String ACTION_TAB = "com.pocketbudget.app.WIDGET_TAB";
+    static final String EXTRA_TAB = "tab";
+
+    @Override
+    public void onUpdate(Context c, AppWidgetManager m, int[] ids) {
+        for (int id : ids) draw(c, m, id);
+        m.notifyAppWidgetViewDataChanged(ids, R.id.w_list);
+    }
+
+    @Override
+    public void onReceive(Context c, Intent intent) {
+        super.onReceive(c, intent);
+        if (ACTION_TAB.equals(intent.getAction())) {
+            int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+            if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return;
+            prefs(c).edit().putInt("tab_" + id, intent.getIntExtra(EXTRA_TAB, 0)).apply();
+            AppWidgetManager m = AppWidgetManager.getInstance(c);
+            draw(c, m, id);
+            m.notifyAppWidgetViewDataChanged(id, R.id.w_list);
+        }
+    }
+
+    @Override
+    public void onDeleted(Context c, int[] ids) {
+        SharedPreferences.Editor e = prefs(c).edit();
+        for (int id : ids) e.remove("tab_" + id);
+        e.apply();
+    }
+
+    /** Called by the app whenever the budget changes. */
+    static void saveAndRefresh(Context c, String json) {
+        prefs(c).edit().putString(KEY_DATA, json).apply();
+        AppWidgetManager m = AppWidgetManager.getInstance(c);
+        int[] ids = m.getAppWidgetIds(new ComponentName(c, BudgetWidget.class));
+        if (ids == null || ids.length == 0) return;
+        for (int id : ids) draw(c, m, id);
+        m.notifyAppWidgetViewDataChanged(ids, R.id.w_list);
+    }
+
+    static SharedPreferences prefs(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    /** This month's saved data, or null if there is none yet or it's from an earlier month. */
+    static JSONObject currentData(Context c) {
+        String raw = prefs(c).getString(KEY_DATA, null);
+        if (raw == null) return null;
+        try {
+            JSONObject d = new JSONObject(raw);
+            return monthKey().equals(d.optString("month")) ? d : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    static boolean hasOldData(Context c) {
+        return prefs(c).getString(KEY_DATA, null) != null;
+    }
+
+    static String monthKey() {
+        Calendar cal = Calendar.getInstance();
+        return String.format(Locale.US, "%d-%02d", cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1);
+    }
+
+    static String money(double v) {
+        return NumberFormat.getCurrencyInstance(Locale.US).format(v);
+    }
+
+    static void draw(Context c, AppWidgetManager m, int id) {
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
+        int tab = prefs(c).getInt("tab_" + id, 0);
+        JSONObject d = currentData(c);
+
+        // Tabs
+        v.setInt(R.id.w_tab_bills, "setBackgroundResource", tab == 0 ? R.drawable.widget_tab_on : R.drawable.widget_tab_off);
+        v.setInt(R.id.w_tab_else, "setBackgroundResource", tab == 1 ? R.drawable.widget_tab_on : R.drawable.widget_tab_off);
+        v.setTextColor(R.id.w_tab_bills, c.getColor(tab == 0 ? R.color.w_on_accent : R.color.w_muted));
+        v.setTextColor(R.id.w_tab_else, c.getColor(tab == 1 ? R.color.w_on_accent : R.color.w_muted));
+        v.setOnClickPendingIntent(R.id.w_tab_bills, tabIntent(c, id, 0));
+        v.setOnClickPendingIntent(R.id.w_tab_else, tabIntent(c, id, 1));
+
+        // Month and summary line
+        if (d == null) {
+            v.setTextViewText(R.id.w_month, "");
+            v.setTextViewText(R.id.w_summary, "");
+            v.setTextViewText(R.id.w_empty, hasOldData(c)
+                ? "Open Pocket Budget to load this month."
+                : "Open Pocket Budget once to show your budget here.");
+        } else {
+            v.setTextViewText(R.id.w_month, d.optString("monthName"));
+            if (tab == 0) {
+                v.setTextViewText(R.id.w_summary, money(d.optDouble("billsPaid")) + " paid of "
+                    + money(d.optDouble("billsBudget")) + " · " + d.optInt("nPaid") + " of " + d.optInt("nBills") + " paid");
+                v.setTextViewText(R.id.w_empty, "No bills this month.");
+            } else {
+                double budget = d.optDouble("spendBudget");
+                v.setTextViewText(R.id.w_summary, money(d.optDouble("spent")) + " spent"
+                    + (budget > 0 ? " of " + money(budget) : ""));
+                v.setTextViewText(R.id.w_empty, "No categories yet.");
+            }
+        }
+
+        // Scrollable list of bills or categories
+        Intent svc = new Intent(c, BudgetWidgetService.class);
+        svc.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
+        svc.setData(Uri.parse(svc.toUri(Intent.URI_INTENT_SCHEME)));
+        v.setRemoteAdapter(R.id.w_list, svc);
+        v.setEmptyView(R.id.w_list, R.id.w_empty);
+
+        // Tapping anywhere else opens the app
+        Intent openApp = new Intent(c, MainActivity.class);
+        PendingIntent open = PendingIntent.getActivity(c, 0, openApp,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        v.setOnClickPendingIntent(R.id.w_head, open);
+        v.setOnClickPendingIntent(R.id.w_summary, open);
+        v.setOnClickPendingIntent(R.id.w_empty, open);
+        int mutable = Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0;
+        PendingIntent template = PendingIntent.getActivity(c, 1, new Intent(c, MainActivity.class),
+            PendingIntent.FLAG_UPDATE_CURRENT | mutable);
+        v.setPendingIntentTemplate(R.id.w_list, template);
+
+        m.updateAppWidget(id, v);
+    }
+
+    static PendingIntent tabIntent(Context c, int id, int tab) {
+        Intent i = new Intent(c, BudgetWidget.class);
+        i.setAction(ACTION_TAB);
+        i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
+        i.putExtra(EXTRA_TAB, tab);
+        return PendingIntent.getBroadcast(c, id * 10 + tab, i,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+}

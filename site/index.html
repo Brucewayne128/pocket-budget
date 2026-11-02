@@ -492,6 +492,7 @@ function dueStatus(b,paid){
 }
 function render(){
   try{renderYear()}catch{}
+  try{pushWidget()}catch{}
   const mk=keyOf(view), B=bills(), C=cats();
   const BILLS_BUDGET=B.reduce((s,b)=>s+b.amount,0), SPEND_BUDGET=C.reduce((s,c)=>s+(+c.limit||0),0), TOTAL=BILLS_BUDGET+SPEND_BUDGET;
   $("monthName").textContent=view.toLocaleDateString("en-US",{month:"long",year:"numeric"});
@@ -812,6 +813,29 @@ $("yBack").onclick=()=>openYear(false);
 $("yPrev").onclick=()=>{yearView--;renderYear()};
 $("yNext").onclick=()=>{yearView++;renderYear()};
 document.querySelector(".charttabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(!t)return;chartType=t.dataset.chart;try{localStorage.setItem("pb_chart",chartType)}catch{}renderYear()});
+
+
+// ---- Home-screen widget: the app sends this month's numbers to Android (view only) ----
+let widgetTimer=null;
+function pushWidget(){
+  if(MODE!=="owner"||!ready||!(window.Android&&Android.updateWidget))return;
+  clearTimeout(widgetTimer);
+  widgetTimer=setTimeout(()=>{try{
+    const now=new Date(), mk=keyOf(now), B=billsFor(mk), paidMap=state.paid[mk]||{}, C=cats();
+    const css=getComputedStyle(document.documentElement), hex=c=>css.getPropertyValue("--"+(c||"other")).trim()||"#7a8792";
+    const billRows=B.map(b=>{const pd=!!paidMap[b.id], d=parseInt(b.due,10);
+      return {name:b.name,amount:b.amount,due:(d>=1&&d<=31)?d:0,paid:pd,paidAmount:pd?(typeof paidMap[b.id]==="number"?paidMap[b.id]:b.amount):0}})
+      .sort((a,b)=>(a.due||99)-(b.due||99));
+    const billsPaid=Object.keys(paidMap).reduce((t,id)=>{const v=paidMap[id];return t+(typeof v==="number"?v:(v?((B.find(b=>b.id===id)||{}).amount||0):0))},0);
+    const by={};C.forEach(c=>by[c.id]=0);let spent=0;
+    state.expenses.forEach(e=>{if((e.date||"").startsWith(mk)){const a=+e.amount||0;spent+=a;by[catOf(e.category).id]+=a}});
+    const catRows=C.map(c=>({name:c.name,spent:by[c.id]||0,limit:+c.limit||0,color:hex(c.color)}));
+    const billsBudget=B.reduce((t,b)=>t+b.amount,0), spendBudget=C.reduce((t,c)=>t+(+c.limit||0),0);
+    Android.updateWidget(JSON.stringify({month:mk,monthName:now.toLocaleDateString("en-US",{month:"long"}),
+      billsPaid,billsBudget,nPaid:B.filter(b=>paidMap[b.id]).length,nBills:B.length,bills:billRows,
+      spent,spendBudget,cats:catRows,left:billsBudget+spendBudget-billsPaid-spent}));
+  }catch(e){}},400);
+}
 
 // ---- Swipe pager ----
 const pager=$("pager"), panes=[$("pane-0"),$("pane-1")];

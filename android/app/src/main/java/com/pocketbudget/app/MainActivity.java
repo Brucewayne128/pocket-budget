@@ -223,6 +223,12 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** The app sends this month's numbers so the home-screen widget can show them. */
+        @JavascriptInterface
+        public void updateWidget(String json) {
+            BudgetWidget.saveAndRefresh(getApplicationContext(), json);
+        }
+
         @JavascriptInterface
         public void retry() {
             runOnUiThread(() -> web.loadUrl(appUrl));
