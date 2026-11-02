@@ -169,6 +169,14 @@ body[data-mode="landing"] .live{visibility:hidden}
 .themebtn .i-sun{display:none}
 .is-dark .themebtn .i-sun{display:block}
 .is-dark .themebtn .i-moon{display:none}
+
+.collhead{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;background:transparent;border:0;padding:0;cursor:pointer;text-align:left;color:var(--ink)}
+.collhead .chev{flex:none;width:36px;height:36px;padding:7px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--accent);transition:transform .3s ease}
+.collhead[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.collbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s ease,margin-top .3s ease;margin-top:-12px}
+.collbody.open{grid-template-rows:1fr;margin-top:0}
+.collinner{overflow:hidden;min-height:0;display:flex;flex-direction:column;gap:12px}
+@media (prefers-reduced-motion:reduce){.collhead .chev,.collbody{transition:none}}
 </style>
 </head>
 <body>
@@ -272,7 +280,11 @@ body[data-mode="landing"] .live{visibility:hidden}
   </div>
 
   <section class="card" id="shareCard">
-    <h3>Share your live budget</h3>
+    <button type="button" class="collhead" id="shareToggle" aria-expanded="false" aria-controls="shareBody">
+      <h3>Share your live budget</h3>
+      <svg class="chev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="collbody" id="shareBody"><div class="collinner">
     <div class="pair">
       <div class="qr" id="qr" aria-label="QR code for the view-only link"></div>
       <div>
@@ -286,6 +298,7 @@ body[data-mode="landing"] .live{visibility:hidden}
     </div>
     <div class="linkbox num" id="shareLink">Setting up your link…</div>
     <div class="eactions"><button type="button" class="primary" id="shareBtn">Send the link</button><span class="msg" id="shareMsg"></span></div>
+    </div></div>
   </section>
 
   <section class="card" id="landing">
@@ -525,6 +538,18 @@ function makeEditor(kind){
     if(!hidden&&y>40){hidden=true;try{Android.setNavHidden(true)}catch{}}
     else if(hidden&&y<=2){hidden=false;try{Android.setNavHidden(false)}catch{}}}
   addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(check)}},{passive:true});
+})();
+
+
+// ---- Share section: arrow opens and closes it (remembered on this phone) ----
+(function(){
+  const btn=$("shareToggle"), body=$("shareBody");
+  function set(open,save){btn.setAttribute("aria-expanded",String(open));body.classList.toggle("open",open);
+    btn.setAttribute("aria-label",open?"Hide the share section":"Show the share section");
+    if(save)try{localStorage.setItem("pb_share_open",open?"1":"0")}catch{}}
+  let start=false;try{start=localStorage.getItem("pb_share_open")==="1"}catch{}
+  set(start,false);
+  btn.onclick=()=>set(btn.getAttribute("aria-expanded")!=="true",true);
 })();
 
 // ---- Swipe pager ----
