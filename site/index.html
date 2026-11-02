@@ -833,7 +833,7 @@ function pushWidget(){
     const billsBudget=B.reduce((t,b)=>t+b.amount,0), spendBudget=C.reduce((t,c)=>t+(+c.limit||0),0);
     Android.updateWidget(JSON.stringify({month:mk,monthName:now.toLocaleDateString("en-US",{month:"long"}),
       billsPaid,billsBudget,nPaid:B.filter(b=>paidMap[b.id]).length,nBills:B.length,bills:billRows,
-      spent,spendBudget,cats:catRows,left:billsBudget+spendBudget-billsPaid-spent}));
+      spent,spendBudget,cats:catRows,left:billsBudget+spendBudget-billsPaid-spent,dark:document.documentElement.classList.contains("is-dark")}));
   }catch(e){}},400);
 }
 

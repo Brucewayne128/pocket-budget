@@ -56,7 +56,10 @@ public class BudgetWidget extends AppWidgetProvider {
 
     /** Called by the app whenever the budget changes. */
     static void saveAndRefresh(Context c, String json) {
-        prefs(c).edit().putString(KEY_DATA, json).apply();
+        SharedPreferences.Editor e = prefs(c).edit().putString(KEY_DATA, json);
+        try { JSONObject o = new JSONObject(json); if (o.has("dark")) e.putBoolean("dark", o.optBoolean("dark")); }
+        catch (Exception ignored) { }
+        e.apply();
         AppWidgetManager m = AppWidgetManager.getInstance(c);
         int[] ids = m.getAppWidgetIds(new ComponentName(c, BudgetWidget.class));
         if (ids == null || ids.length == 0) return;
@@ -84,6 +87,42 @@ public class BudgetWidget extends AppWidgetProvider {
         return prefs(c).getString(KEY_DATA, null) != null;
     }
 
+    /** Widget colors follow the app's light/dark choice (sent by the app), else the phone's setting. */
+    static final class Pal {
+        final boolean dark;
+        final int bg, ink, muted, line, accent, onAccent, good, warn, bad;
+        Pal(boolean dark) {
+            this.dark = dark;
+            bg = dark ? 0xFF18212A : 0xFFFFFFFF;
+            ink = dark ? 0xFFE6EDF3 : 0xFF15212C;
+            muted = dark ? 0xFF93A1AE : 0xFF5D6B78;
+            line = dark ? 0xFF2A3642 : 0xFFD9DFE5;
+            accent = dark ? 0xFF5FA8DC : 0xFF1F5F8B;
+            onAccent = dark ? 0xFF0B1620 : 0xFFFFFFFF;
+            good = dark ? 0xFF4CC38A : 0xFF1D7A4F;
+            warn = dark ? 0xFFE2A336 : 0xFFB26A00;
+            bad = dark ? 0xFFF2786D : 0xFFB3261E;
+        }
+    }
+
+    static Pal palette(Context c) {
+        SharedPreferences p = prefs(c);
+        if (p.contains("dark")) return new Pal(p.getBoolean("dark", false));
+        int night = c.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+        return new Pal(night == android.content.res.Configuration.UI_MODE_NIGHT_YES);
+    }
+
+    /** Called by the app when you switch between light and dark mode. */
+    static void setDark(Context c, boolean dark) {
+        if (prefs(c).contains("dark") && prefs(c).getBoolean("dark", false) == dark) return;
+        prefs(c).edit().putBoolean("dark", dark).apply();
+        AppWidgetManager m = AppWidgetManager.getInstance(c);
+        int[] ids = m.getAppWidgetIds(new ComponentName(c, BudgetWidget.class));
+        if (ids == null || ids.length == 0) return;
+        for (int id : ids) draw(c, m, id);
+        m.notifyAppWidgetViewDataChanged(ids, R.id.w_list);
+    }
+
     static String monthKey() {
         Calendar cal = Calendar.getInstance();
         return String.format(Locale.US, "%d-%02d", cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1);
@@ -97,12 +136,22 @@ public class BudgetWidget extends AppWidgetProvider {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
         int tab = prefs(c).getInt("tab_" + id, 0);
         JSONObject d = currentData(c);
+        Pal pal = palette(c);
+        int on = pal.dark ? R.drawable.widget_tab_on_dark : R.drawable.widget_tab_on_light;
+        int off = pal.dark ? R.drawable.widget_tab_off_dark : R.drawable.widget_tab_off_light;
+
+        // Colors
+        v.setInt(R.id.w_root, "setBackgroundResource", pal.dark ? R.drawable.widget_bg_dark : R.drawable.widget_bg_light);
+        v.setTextColor(R.id.w_title, pal.ink);
+        v.setTextColor(R.id.w_month, pal.muted);
+        v.setTextColor(R.id.w_summary, pal.ink);
+        v.setTextColor(R.id.w_empty, pal.muted);
 
         // Tabs
-        v.setInt(R.id.w_tab_bills, "setBackgroundResource", tab == 0 ? R.drawable.widget_tab_on : R.drawable.widget_tab_off);
-        v.setInt(R.id.w_tab_else, "setBackgroundResource", tab == 1 ? R.drawable.widget_tab_on : R.drawable.widget_tab_off);
-        v.setTextColor(R.id.w_tab_bills, c.getColor(tab == 0 ? R.color.w_on_accent : R.color.w_muted));
-        v.setTextColor(R.id.w_tab_else, c.getColor(tab == 1 ? R.color.w_on_accent : R.color.w_muted));
+        v.setInt(R.id.w_tab_bills, "setBackgroundResource", tab == 0 ? on : off);
+        v.setInt(R.id.w_tab_else, "setBackgroundResource", tab == 1 ? on : off);
+        v.setTextColor(R.id.w_tab_bills, tab == 0 ? pal.onAccent : pal.muted);
+        v.setTextColor(R.id.w_tab_else, tab == 1 ? pal.onAccent : pal.muted);
         v.setOnClickPendingIntent(R.id.w_tab_bills, tabIntent(c, id, 0));
         v.setOnClickPendingIntent(R.id.w_tab_else, tabIntent(c, id, 1));
 

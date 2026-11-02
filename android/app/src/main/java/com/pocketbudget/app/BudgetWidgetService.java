@@ -28,7 +28,7 @@ public class BudgetWidgetService extends RemoteViewsService {
 
     private static class Row {
         String name, amount, sub;
-        int subColor;       // color resource
+        String subColor = "muted";
         int barColor = 0;   // ARGB, 0 = no bar
         int barProgress = -1;
         boolean barOver = false;
@@ -76,10 +76,10 @@ public class BudgetWidgetService extends RemoteViewsService {
                 String dueText = dueDay > 0 ? "Due " + month + "/" + dueDay : "";
                 if (paid) {
                     r.sub = "Paid" + (dueText.isEmpty() ? "" : " · " + dueText);
-                    r.subColor = R.color.w_good;
+                    r.subColor = "good";
                 } else if (dueDay == 0) {
                     r.sub = "Not paid yet";
-                    r.subColor = R.color.w_muted;
+                    r.subColor = "muted";
                 } else {
                     int days = dueDay - today;
                     String when;
@@ -88,7 +88,7 @@ public class BudgetWidgetService extends RemoteViewsService {
                     else if (days == 0) when = "Due today";
                     else when = (-days) + (days == -1 ? " day" : " days") + " overdue";
                     r.sub = dueText + " · " + when;
-                    r.subColor = days < 0 ? R.color.w_bad : (days <= 3 ? R.color.w_warn : R.color.w_muted);
+                    r.subColor = days < 0 ? "bad" : (days <= 3 ? "warn" : "muted");
                 }
                 rows.add(r);
             }
@@ -106,7 +106,7 @@ public class BudgetWidgetService extends RemoteViewsService {
                     r.amount = BudgetWidget.money(spent) + " of " + BudgetWidget.money(limit);
                     double rem = limit - spent;
                     r.sub = rem < 0 ? BudgetWidget.money(-rem) + " over budget" : BudgetWidget.money(rem) + " left";
-                    r.subColor = rem < 0 ? R.color.w_bad : R.color.w_muted;
+                    r.subColor = rem < 0 ? "bad" : "muted";
                     r.barProgress = (int) Math.min(1000, Math.round(spent / limit * 1000));
                     r.barOver = rem < 0;
                     try { r.barColor = Color.parseColor(k.optString("color", "#7A8792")); }
@@ -114,7 +114,7 @@ public class BudgetWidgetService extends RemoteViewsService {
                 } else {
                     r.amount = BudgetWidget.money(spent);
                     r.sub = "No set budget";
-                    r.subColor = R.color.w_muted;
+                    r.subColor = "muted";
                 }
                 rows.add(r);
             }
@@ -127,16 +127,22 @@ public class BudgetWidgetService extends RemoteViewsService {
             RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_row);
             if (position >= rows.size()) return v;
             Row r = rows.get(position);
+            BudgetWidget.Pal pal = BudgetWidget.palette(c);
+            v.setTextColor(R.id.row_name, pal.ink);
+            v.setTextColor(R.id.row_amount, pal.ink);
             v.setTextViewText(R.id.row_name, r.name);
             v.setTextViewText(R.id.row_amount, r.amount);
             v.setTextViewText(R.id.row_sub, r.sub);
-            v.setTextColor(R.id.row_sub, c.getColor(r.subColor));
+            int sc = "good".equals(r.subColor) ? pal.good : "bad".equals(r.subColor) ? pal.bad
+                : "warn".equals(r.subColor) ? pal.warn : pal.muted;
+            v.setTextColor(R.id.row_sub, sc);
             if (r.barProgress >= 0) {
                 v.setViewVisibility(R.id.row_bar, View.VISIBLE);
                 v.setProgressBar(R.id.row_bar, 1000, r.barProgress, false);
                 if (Build.VERSION.SDK_INT >= 31) {
-                    int color = r.barOver ? c.getColor(R.color.w_bad) : r.barColor;
+                    int color = r.barOver ? pal.bad : r.barColor;
                     v.setColorStateList(R.id.row_bar, "setProgressTintList", ColorStateList.valueOf(color));
+                    v.setColorStateList(R.id.row_bar, "setProgressBackgroundTintList", ColorStateList.valueOf(pal.line));
                 }
             } else {
                 v.setViewVisibility(R.id.row_bar, View.GONE);

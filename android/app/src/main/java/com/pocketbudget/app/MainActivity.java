@@ -212,6 +212,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setDarkBars(boolean dark) {
             runOnUiThread(() -> { darkBars = dark; applyBarIcons(); });
+            BudgetWidget.setDark(getApplicationContext(), dark);
         }
 
         @JavascriptInterface

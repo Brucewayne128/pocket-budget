@@ -85,8 +85,8 @@
             android:id="@+id/w_list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:divider="@color/w_line"
-            android:dividerHeight="1dp"
+            android:divider="@null"
+            android:dividerHeight="0dp"
             android:scrollbars="none" />
         <TextView
             android:id="@+id/w_empty"
