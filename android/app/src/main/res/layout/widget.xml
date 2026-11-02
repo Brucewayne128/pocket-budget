@@ -30,6 +30,15 @@
             android:layout_height="wrap_content"
             android:textColor="@color/w_muted"
             android:textSize="12sp" />
+        <ImageView
+            android:id="@+id/w_theme"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            android:padding="6dp"
+            android:background="@drawable/widget_tab_off"
+            android:contentDescription="@string/widget_theme"
+            android:src="@drawable/ic_widget_moon" />
     </LinearLayout>
 
     <LinearLayout

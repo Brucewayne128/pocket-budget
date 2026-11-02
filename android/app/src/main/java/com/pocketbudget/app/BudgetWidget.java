@@ -27,6 +27,8 @@ public class BudgetWidget extends AppWidgetProvider {
     static final String KEY_DATA = "data";
     static final String ACTION_TAB = "com.pocketbudget.app.WIDGET_TAB";
     static final String EXTRA_TAB = "tab";
+    static final String ACTION_THEME = "com.pocketbudget.app.WIDGET_THEME";
+    static final String KEY_DARK = "widget_dark";
 
     @Override
     public void onUpdate(Context c, AppWidgetManager m, int[] ids) {
@@ -44,7 +46,19 @@ public class BudgetWidget extends AppWidgetProvider {
             AppWidgetManager m = AppWidgetManager.getInstance(c);
             draw(c, m, id);
             m.notifyAppWidgetViewDataChanged(id, R.id.w_list);
+        } else if (ACTION_THEME.equals(intent.getAction())) {
+            // The widget's own light/dark button
+            prefs(c).edit().putBoolean(KEY_DARK, !palette(c).dark).apply();
+            redrawAll(c);
         }
+    }
+
+    static void redrawAll(Context c) {
+        AppWidgetManager m = AppWidgetManager.getInstance(c);
+        int[] ids = m.getAppWidgetIds(new ComponentName(c, BudgetWidget.class));
+        if (ids == null || ids.length == 0) return;
+        for (int id : ids) draw(c, m, id);
+        m.notifyAppWidgetViewDataChanged(ids, R.id.w_list);
     }
 
     @Override
@@ -56,10 +70,7 @@ public class BudgetWidget extends AppWidgetProvider {
 
     /** Called by the app whenever the budget changes. */
     static void saveAndRefresh(Context c, String json) {
-        SharedPreferences.Editor e = prefs(c).edit().putString(KEY_DATA, json);
-        try { JSONObject o = new JSONObject(json); if (o.has("dark")) e.putBoolean("dark", o.optBoolean("dark")); }
-        catch (Exception ignored) { }
-        e.apply();
+        prefs(c).edit().putString(KEY_DATA, json).apply();
         AppWidgetManager m = AppWidgetManager.getInstance(c);
         int[] ids = m.getAppWidgetIds(new ComponentName(c, BudgetWidget.class));
         if (ids == null || ids.length == 0) return;
@@ -107,21 +118,13 @@ public class BudgetWidget extends AppWidgetProvider {
 
     static Pal palette(Context c) {
         SharedPreferences p = prefs(c);
-        if (p.contains("dark")) return new Pal(p.getBoolean("dark", false));
+        if (p.contains(KEY_DARK)) return new Pal(p.getBoolean(KEY_DARK, false));
         int night = c.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
         return new Pal(night == android.content.res.Configuration.UI_MODE_NIGHT_YES);
     }
 
-    /** Called by the app when you switch between light and dark mode. */
-    static void setDark(Context c, boolean dark) {
-        if (prefs(c).contains("dark") && prefs(c).getBoolean("dark", false) == dark) return;
-        prefs(c).edit().putBoolean("dark", dark).apply();
-        AppWidgetManager m = AppWidgetManager.getInstance(c);
-        int[] ids = m.getAppWidgetIds(new ComponentName(c, BudgetWidget.class));
-        if (ids == null || ids.length == 0) return;
-        for (int id : ids) draw(c, m, id);
-        m.notifyAppWidgetViewDataChanged(ids, R.id.w_list);
-    }
+    /** The widget now has its own light/dark button, so the app's theme no longer changes it. */
+    static void setDark(Context c, boolean dark) { }
 
     static String monthKey() {
         Calendar cal = Calendar.getInstance();
@@ -133,10 +136,10 @@ public class BudgetWidget extends AppWidgetProvider {
     }
 
     static void draw(Context c, AppWidgetManager m, int id) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
+        Pal pal = palette(c);
+        RemoteViews v = new RemoteViews(c.getPackageName(), pal.dark ? R.layout.widget_dark : R.layout.widget);
         int tab = prefs(c).getInt("tab_" + id, 0);
         JSONObject d = currentData(c);
-        Pal pal = palette(c);
         int on = pal.dark ? R.drawable.widget_tab_on_dark : R.drawable.widget_tab_on_light;
         int off = pal.dark ? R.drawable.widget_tab_off_dark : R.drawable.widget_tab_off_light;
 
@@ -152,6 +155,9 @@ public class BudgetWidget extends AppWidgetProvider {
         v.setInt(R.id.w_tab_else, "setBackgroundResource", tab == 1 ? on : off);
         v.setTextColor(R.id.w_tab_bills, tab == 0 ? pal.onAccent : pal.muted);
         v.setTextColor(R.id.w_tab_else, tab == 1 ? pal.onAccent : pal.muted);
+        Intent themeI = new Intent(c, BudgetWidget.class).setAction(ACTION_THEME);
+        v.setOnClickPendingIntent(R.id.w_theme, PendingIntent.getBroadcast(c, 7, themeI,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         v.setOnClickPendingIntent(R.id.w_tab_bills, tabIntent(c, id, 0));
         v.setOnClickPendingIntent(R.id.w_tab_else, tabIntent(c, id, 1));
 

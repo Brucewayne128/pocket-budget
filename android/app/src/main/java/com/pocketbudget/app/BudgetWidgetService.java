@@ -124,10 +124,10 @@ public class BudgetWidgetService extends RemoteViewsService {
 
         @Override
         public RemoteViews getViewAt(int position) {
-            RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_row);
+            BudgetWidget.Pal pal = BudgetWidget.palette(c);
+            RemoteViews v = new RemoteViews(c.getPackageName(), pal.dark ? R.layout.widget_row_dark : R.layout.widget_row);
             if (position >= rows.size()) return v;
             Row r = rows.get(position);
-            BudgetWidget.Pal pal = BudgetWidget.palette(c);
             v.setTextColor(R.id.row_name, pal.ink);
             v.setTextColor(R.id.row_amount, pal.ink);
             v.setTextViewText(R.id.row_name, r.name);
@@ -152,7 +152,7 @@ public class BudgetWidgetService extends RemoteViewsService {
         }
 
         @Override public RemoteViews getLoadingView() { return null; }
-        @Override public int getViewTypeCount() { return 1; }
+        @Override public int getViewTypeCount() { return 2; }  // light and dark row designs
         @Override public long getItemId(int position) { return position; }
         @Override public boolean hasStableIds() { return false; }
     }

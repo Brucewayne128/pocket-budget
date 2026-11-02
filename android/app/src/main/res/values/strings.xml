@@ -5,4 +5,5 @@
     <string name="widget_tab_bills">Bills</string>
     <string name="widget_tab_else">Everything else</string>
     <string name="widget_empty">Open Pocket Budget once to show your budget here.</string>
+    <string name="widget_theme">Switch light or dark</string>
 </resources>
