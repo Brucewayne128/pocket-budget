@@ -259,6 +259,21 @@ body[data-mode="viewer"] header h1{font-size:clamp(.98rem,4.7vw,1.35rem)}
 body[data-mode="viewer"] .hdr-right{gap:6px}
 body[data-mode="viewer"] .hdr-right .themebtn{width:34px;height:34px}
 @media (max-width:370px){body[data-mode="viewer"] header h1{font-size:.9rem}body[data-mode="viewer"] .hdr-right{gap:4px}}
+
+.foldrow{display:flex;align-items:flex-start;gap:12px}
+.foldrow>:first-child{flex:1;min-width:0}
+.foldbtn{flex:none;width:36px;height:36px;padding:6px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--accent);cursor:pointer;display:grid;place-items:center;margin-left:4px}
+.foldbtn svg{transition:transform .3s ease}
+.foldbtn[aria-expanded="true"] svg{transform:rotate(180deg)}
+.cardhead>.foldbtn{margin-left:auto}
+.cardhead>.editbtn+.foldbtn,.cardhead>span+.foldbtn{margin-left:4px}
+@media (prefers-reduced-motion:reduce){.foldbtn svg{transition:none}}
+
+.cardhead.hasfold{flex-wrap:nowrap;align-items:center}
+.titlestack{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:0}
+.titlestack h3{margin:0}
+.titlestack span{font-size:.85rem;color:var(--muted)}
+.cardhead.hasfold .editbtn{flex:none}
 </style>
 </head>
 <body>
@@ -959,6 +974,42 @@ $("incomeBtn").onclick=()=>openIncome(!incomeOpen);
 $("iBack").onclick=()=>openIncome(false);
 $("iPrev").onclick=()=>{view.setMonth(view.getMonth()-1);editorClosers.forEach(f=>f());render()};
 $("iNext").onclick=()=>{view.setMonth(view.getMonth()+1);editorClosers.forEach(f=>f());render()};
+
+
+// ---- Arrow buttons that fold sections open and closed (remembered on this phone) ----
+const CHEV='<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function foldify(anchorId,key,label){
+  const anchor=$(anchorId); if(!anchor)return;
+  const card=anchor.closest(".card, .hero"); if(!card||card.dataset.folded)return;
+  card.dataset.folded="1";
+  let head=card.querySelector(":scope > .cardhead")||card.firstElementChild;
+  if(!head.classList.contains("cardhead")){const row=document.createElement("div");row.className="cardhead foldrow";card.insertBefore(row,head);row.appendChild(head);head=row}
+  // Title with its count underneath, so the title, Edit and the arrow fit on one line on a phone.
+  const h3=head.querySelector(":scope > h3"), sp=h3&&h3.nextElementSibling;
+  if(sp&&sp.tagName==="SPAN"){const st=document.createElement("div");st.className="titlestack";head.insertBefore(st,h3);st.appendChild(h3);st.appendChild(sp)}
+  head.classList.add("hasfold");
+  const btn=document.createElement("button");btn.type="button";btn.className="foldbtn";btn.innerHTML=CHEV;head.appendChild(btn);
+  const body=document.createElement("div");body.className="collbody";const inner=document.createElement("div");inner.className="collinner";body.appendChild(inner);
+  while(head.nextSibling)inner.appendChild(head.nextSibling);
+  card.appendChild(body);
+  function set(open,save){btn.setAttribute("aria-expanded",String(open));body.classList.toggle("open",open);
+    btn.setAttribute("aria-label",(open?"Hide ":"Show ")+label);
+    if(save)try{localStorage.setItem("pb_fold_"+key,open?"1":"0")}catch{}}
+  let start=true;try{const v=localStorage.getItem("pb_fold_"+key);if(v!==null)start=v==="1"}catch{}
+  set(start,false);
+  btn.onclick=()=>set(btn.getAttribute("aria-expanded")!=="true",true);
+  // Opening an editor inside a folded section opens the section too.
+  card.querySelectorAll(".editbtn").forEach(b=>b.addEventListener("click",()=>{if(btn.getAttribute("aria-expanded")!=="true")set(true,true)}));
+}
+foldify("left","left","the month summary");
+foldify("budgets","budgets","spending budgets");
+foldify("list","spending","spending this month");
+foldify("bills","bills","monthly bills");
+foldify("deposits","deposits","deposits");
+foldify("incomeSummary","incomeSummary","this month's income summary");
+foldify("chartBox","chart","the graph");
+foldify("facts","facts","year details");
+foldify("mtable","mtable","month by month");
 
 // ---- Swipe pager ----
 const pager=$("pager"), panes=[$("pane-0"),$("pane-1")];
