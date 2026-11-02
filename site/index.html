@@ -522,7 +522,10 @@ function render(){
   else $("stats").innerHTML=`<span>${view<now?"Past month":"Upcoming month"}</span>`;
 
   $("billsCount").textContent=`${nPaid} of ${B.length} paid`;
-  $("bills").innerHTML=B.length?B.map(b=>`<label class="bill${paidMap[b.id]?" paid":""}" for="bill-${esc(b.id)}">
+  // Soonest due date first; bills without a due day go to the bottom in their saved order.
+  const dueKey=b=>{const dd=dueDate(b);return dd?dd.getDate():99};
+  const shownBills=[...B].sort((a,b)=>dueKey(a)-dueKey(b));
+  $("bills").innerHTML=B.length?shownBills.map(b=>`<label class="bill${paidMap[b.id]?" paid":""}" for="bill-${esc(b.id)}">
     <input type="checkbox" id="bill-${esc(b.id)}" data-bill="${esc(b.id)}" ${paidMap[b.id]?"checked":""} ${canEdit?"":"disabled"}>
     <span><span class="bn">${esc(b.name)}</span>${dueLabel(b)}${dueStatus(b,!!paidMap[b.id])}</span>
     <span class="ba num">${money(paidMap[b.id]?paidAmount(paidMap,b.id):b.amount)}</span></label>`).join(""):`<div class="empty">${canEdit?"No bills yet. Tap Edit bills to add your monthly bills.":"No bills yet."}</div>`;
