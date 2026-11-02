@@ -228,6 +228,13 @@ header h1{font-size:clamp(1.05rem,5.2vw,1.35rem);white-space:nowrap;min-width:0}
 .hdr-right{gap:8px;flex:none}
 .hdr-right .themebtn{width:36px;height:36px}
 @media (max-width:400px){.live{font-size:.7rem;letter-spacing:.03em}}
+
+.erow.withdue,.ehead.withdue{grid-template-columns:minmax(0,1fr) 5.6rem 3.4rem auto}
+.erow.withdue input[data-f="due"]{text-align:center;padding:10px 6px !important}
+.bill .due{display:inline-block;margin-left:6px;font-size:.78rem;font-weight:600;color:var(--muted);padding:1px 7px;border:1px solid var(--line);border-radius:999px;white-space:nowrap}
+.bill .cd{font-weight:600;color:var(--ink)}
+.bill .cd.soon{color:var(--warn)}
+.bill .cd.late{color:var(--bad)}
 </style>
 </head>
 <body>
@@ -463,6 +470,26 @@ $("date").value=todayISO();
 function setBar(id,v,of){const el=$(id);el.style.width=pct(v,of)+"%";el.classList.toggle("over",of>0&&v>of)}
 function paidAmount(month,billId){const v=month[billId];if(typeof v==="number")return v;if(v){const b=bills().find(x=>x.id===billId);return b?b.amount:0}return 0}
 
+
+// ---- Bill due dates ----
+// A bill's "due" is a day of the month (1-31). Shown as month/day for the month on screen.
+function dueDate(b){const d=parseInt(b.due,10);if(!(d>=1&&d<=31))return null;
+  const last=new Date(view.getFullYear(),view.getMonth()+1,0).getDate();
+  return new Date(view.getFullYear(),view.getMonth(),Math.min(d,last))}
+function dueLabel(b){const dd=dueDate(b);return dd?` <span class="due num">Due ${dd.getMonth()+1}/${dd.getDate()}</span>`:""}
+function dueStatus(b,paid){
+  if(paid)return `<span class="bs">Paid this month</span>`;
+  const dd=dueDate(b);if(!dd)return `<span class="bs">Not paid yet</span>`;
+  const t=new Date();t.setHours(0,0,0,0);
+  const days=Math.round((dd-t)/86400000);
+  let txt,cls="";
+  if(days>1)txt=`${days} days until due`;
+  else if(days===1){txt="Due tomorrow";cls=" soon"}
+  else if(days===0){txt="Due today";cls=" soon"}
+  else{txt=`${-days} day${days===-1?"":"s"} overdue`;cls=" late"}
+  if(days>1&&days<=3)cls=" soon";
+  return `<span class="bs">Not paid yet · <span class="cd${cls}">${txt}</span></span>`;
+}
 function render(){
   try{renderYear()}catch{}
   const mk=keyOf(view), B=bills(), C=cats();
@@ -497,7 +524,7 @@ function render(){
   $("billsCount").textContent=`${nPaid} of ${B.length} paid`;
   $("bills").innerHTML=B.length?B.map(b=>`<label class="bill${paidMap[b.id]?" paid":""}" for="bill-${esc(b.id)}">
     <input type="checkbox" id="bill-${esc(b.id)}" data-bill="${esc(b.id)}" ${paidMap[b.id]?"checked":""} ${canEdit?"":"disabled"}>
-    <span><span class="bn">${esc(b.name)}</span><span class="bs">${paidMap[b.id]?"Paid this month":"Not paid yet"}</span></span>
+    <span><span class="bn">${esc(b.name)}</span>${dueLabel(b)}${dueStatus(b,!!paidMap[b.id])}</span>
     <span class="ba num">${money(paidMap[b.id]?paidAmount(paidMap,b.id):b.amount)}</span></label>`).join(""):`<div class="empty">${canEdit?"No bills yet. Tap Edit bills to add your monthly bills.":"No bills yet."}</div>`;
   setBar("billsBar2",billsPaid,BILLS_BUDGET);
   $("billsSum").innerHTML=`${money(billsPaid)} <small>of ${money(BILLS_BUDGET)}</small>`;
@@ -584,10 +611,11 @@ function makeEditor(kind){
   const close=()=>{box.hidden=true;btn.textContent=label};
   editorClosers.push(close);
   function draw(){
-    box.innerHTML=`<div class="ehead"><span>${kind==="bills"?"Bill":"Category"}</span><span>${kind==="bills"?"Per month":"Monthly budget"}</span><span></span></div>`+
+    box.innerHTML=`<div class="ehead${kind==="bills"?" withdue":""}"><span>${kind==="bills"?"Bill":"Category"}</span><span>${kind==="bills"?"Per month":"Monthly budget"}</span>${kind==="bills"?"<span>Due day</span>":""}<span></span></div>`+
       draft.map((r,i)=>{const fixed=kind==="cats"&&r.id==="other";
-        return `<div class="erow">${fixed?`<span class="fixed">Other</span>`:`<input type="text" id="${kind}-n-${i}" data-i="${i}" data-f="name" value="${esc(r.name)}" placeholder="${kind==="bills"?"e.g. Internet":"e.g. Pets"}" maxlength="30" aria-label="Name">`}
+        return `<div class="erow${kind==="bills"?" withdue":""}">${fixed?`<span class="fixed">Other</span>`:`<input type="text" id="${kind}-n-${i}" data-i="${i}" data-f="name" value="${esc(r.name)}" placeholder="${kind==="bills"?"e.g. Internet":"e.g. Pets"}" maxlength="30" aria-label="Name">`}
         <input inputmode="decimal" id="${kind}-a-${i}" data-i="${i}" data-f="amt" value="${r[amtKey]===""?"":esc(r[amtKey])}" placeholder="${kind==="bills"?"0.00":"No limit"}" aria-label="Amount">
+        ${kind==="bills"?`<input inputmode="numeric" id="bills-d-${i}" data-i="${i}" data-f="due" value="${r.due?esc(r.due):""}" placeholder="Day" maxlength="2" aria-label="Day of the month it's due">`:""}
         <button type="button" class="rm" data-rm="${i}" aria-label="Remove" ${fixed?"disabled":""}>×</button></div>`}).join("")+
       `<button type="button" class="addrow" data-add>+ Add ${kind==="bills"?"a bill":"a category"}</button>
       ${kind==="bills"?(()=>{const mn=view.toLocaleDateString("en-US",{month:"long"});return `<fieldset class="scope"><legend>Save these bills for</legend>
@@ -604,7 +632,7 @@ function makeEditor(kind){
   };
   box.addEventListener("change",e=>{if(e.target.name==="billScope")scope=e.target.value});
   box.addEventListener("input",e=>{const t=e.target;if(t.dataset.i==null)return;const r=draft[+t.dataset.i];
-    if(t.dataset.f==="name")r.name=t.value;else r[amtKey]=t.value});
+    if(t.dataset.f==="name")r.name=t.value;else if(t.dataset.f==="due")r.due=t.value;else r[amtKey]=t.value});
   box.addEventListener("click",async e=>{
     const t=e.target;
     if(t.dataset.rm!=null){draft.splice(+t.dataset.rm,1);draw();return}
@@ -621,7 +649,10 @@ function makeEditor(kind){
         if(!name){m.textContent="Every row needs a name, or remove the empty row.";return}
         if(!(amt>=0)){m.textContent=`Enter the amount for ${name} as a number, like 120.`;return}
         if(kind==="bills"&&!(amt>0)){m.textContent=`Enter how much ${name} costs each month.`;return}
-        out.push(kind==="bills"?{id:r.id||newId(name),name,amount:amt}:{id:r.id||newId(name),name,limit:amt,color:r.color||"c5"});
+        let due=null;
+        if(kind==="bills"&&String(r.due??"").trim()!==""){due=parseInt(String(r.due).trim(),10);
+          if(!(due>=1&&due<=31)||!/^\d{1,2}$/.test(String(r.due).trim())){m.textContent=`Enter the day ${name} is due as a number from 1 to 31, or leave it blank.`;return}}
+        out.push(kind==="bills"?(due?{id:r.id||newId(name),name,amount:amt,due}:{id:r.id||newId(name),name,amount:amt}):{id:r.id||newId(name),name,limit:amt,color:r.color||"c5"});
       }
       if(!canEdit){m.textContent="Not connected yet, so changes can't be saved.";return}
       t.disabled=true;
