@@ -5,7 +5,11 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowInsetsController;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceError;
@@ -23,6 +27,8 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private String appUrl;
+    private int insetTop = 0, insetBottom = 0;
+    private boolean darkBars = false;
 
     private static final String OFFLINE_PAGE =
         "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
@@ -39,9 +45,20 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         appUrl = getString(R.string.app_url);
 
+        goEdgeToEdge();
+
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#EEF1F4"));
         setContentView(web);
+
+        // Tell the page how tall the status bar and the bottom button bar are,
+        // so it can draw behind them but keep its content clear of them.
+        web.setOnApplyWindowInsetsListener((v, insets) -> {
+            insetTop = insets.getSystemWindowInsetTop();
+            insetBottom = insets.getSystemWindowInsetBottom();
+            pushInsets();
+            return insets;
+        });
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -64,6 +81,11 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPageFinished(WebView view, String url) {
+                pushInsets();
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
                     view.loadDataWithBaseURL(null, OFFLINE_PAGE, "text/html", "utf-8", null);
@@ -76,6 +98,52 @@ public class MainActivity extends Activity {
         } else {
             web.loadUrl(appUrl);
         }
+    }
+
+    /** Let the page show through a clear status bar and a clear bottom button bar. */
+    @SuppressWarnings("deprecation")
+    private void goEdgeToEdge() {
+        Window w = getWindow();
+        w.setStatusBarColor(Color.TRANSPARENT);
+        w.setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= 29) {
+            w.setNavigationBarContrastEnforced(false);
+            w.setStatusBarContrastEnforced(false);
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            w.setDecorFitsSystemWindows(false);
+        } else {
+            w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
+        applyBarIcons();
+    }
+
+    /** Dark icons on the light theme, light icons on the dark theme, so the buttons stay visible. */
+    @SuppressWarnings("deprecation")
+    private void applyBarIcons() {
+        Window w = getWindow();
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = w.getInsetsController();
+            if (c == null) return;
+            int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            c.setSystemBarsAppearance(darkBars ? 0 : light, light);
+        } else {
+            View d = w.getDecorView();
+            int flags = d.getSystemUiVisibility();
+            int light = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            d.setSystemUiVisibility(darkBars ? (flags & ~light) : (flags | light));
+        }
+    }
+
+    private void pushInsets() {
+        if (web == null) return;
+        float density = getResources().getDisplayMetrics().density;
+        int top = Math.round(insetTop / density), bottom = Math.round(insetBottom / density);
+        web.evaluateJavascript("(function(){var r=document.documentElement;if(!r)return;"
+            + "r.style.setProperty('--sat','" + top + "px');"
+            + "r.style.setProperty('--sab','" + bottom + "px');})()", null);
     }
 
     @Override
@@ -104,6 +172,11 @@ public class MainActivity extends Activity {
             send.setType("text/plain");
             send.putExtra(Intent.EXTRA_TEXT, text);
             runOnUiThread(() -> startActivity(Intent.createChooser(send, "Share your budget")));
+        }
+
+        @JavascriptInterface
+        public void setDarkBars(boolean dark) {
+            runOnUiThread(() -> { darkBars = dark; applyBarIcons(); });
         }
 
         @JavascriptInterface

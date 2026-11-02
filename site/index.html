@@ -29,10 +29,10 @@
   --gas:#e0a63a; --food:#55b886; --disp:#a685e8; --bills:#6c9fe0; --other:#94a2ae; --c5:#3fbfbf; --c6:#ef7d9f; --c7:#c99a68; --c8:#8a95f0; color-scheme:dark}
 
 *{box-sizing:border-box}
-html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{--top-inset:max(env(safe-area-inset-top,0px),var(--sat,0px));--bottom-inset:max(env(safe-area-inset-bottom,0px),var(--sab,0px));padding-top:var(--top-inset);padding-bottom:var(--bottom-inset);background:var(--bg)}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:var(--top-inset);z-index:10;background:var(--bg)}
 .wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
 .num{font-variant-numeric:tabular-nums}
 button,input{font:inherit;color:inherit}
@@ -138,7 +138,7 @@ input[type=text],input[type=date],input[inputmode]{width:100%;padding:12px 14px;
 .eactions .primary{padding:10px 16px}
 .addrow{background:transparent;border:1.5px dashed var(--line);border-radius:10px;padding:10px;font-weight:600;cursor:pointer;color:var(--accent)}
 .emsg{font-size:.85rem;color:var(--bad);min-height:1em}
-.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;position:sticky;top:var(--top-inset);z-index:5}
 .tab{border:0;background:transparent;border-radius:9px;padding:10px 8px;font-weight:700;cursor:pointer;color:var(--muted)}
 .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .pager{display:flex;gap:16px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;align-items:flex-start;scrollbar-width:none;overscroll-behavior-x:contain;transition:height .25s ease}
@@ -508,7 +508,8 @@ function makeEditor(kind){
   const isDark=()=>root.dataset.theme?root.dataset.theme==="dark":mq.matches;
   function sync(){const d=isDark();root.classList.toggle("is-dark",d);
     $("themeBtn").setAttribute("aria-label",d?"Switch to light mode":"Switch to dark mode");
-    const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=d?"#0f151b":"#1f5f8b"}
+    const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=d?"#0f151b":"#1f5f8b";
+    try{window.Android&&Android.setDarkBars&&Android.setDarkBars(d)}catch{}}
   $("themeBtn").onclick=()=>{const next=isDark()?"light":"dark";root.dataset.theme=next;try{localStorage.setItem("pb_theme",next)}catch{}sync()};
   try{mq.addEventListener("change",sync)}catch{}
   sync();

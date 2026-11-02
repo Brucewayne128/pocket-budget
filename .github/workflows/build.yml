@@ -43,6 +43,7 @@ jobs:
           if [ "$REPO" = "$OWNER.github.io" ]; then URL="https://$OWNER.github.io/"; else URL="https://$OWNER.github.io/$REPO/"; fi
           echo "App address: $URL"
           sed -i "s|https://example.github.io/pocket-budget/|$URL|" android/app/src/main/res/values/config.xml
+          sed -i "s|versionCode 1$|versionCode ${{ github.run_number }}|; s|versionName \"1.0\"|versionName \"1.0.${{ github.run_number }}\"|" android/app/build.gradle
 
       - name: Build APK
         working-directory: android
