@@ -189,6 +189,8 @@ public class MainActivity extends Activity {
         super.onResume();
         goEdgeToEdge();
         applyNavHidden();
+        // Wake the live connection back up so saved changes reach viewers right away.
+        if (web != null) web.evaluateJavascript("window.reconnect&&window.reconnect()", null);
     }
 
     @Override

@@ -313,6 +313,7 @@ body[data-mode="viewer"] .refreshbtn{display:grid}
       </div>
     </div>
     <div class="linkbox num" id="shareLink">Setting up your link…</div>
+    <div class="updated" id="shareCode"></div>
     <div class="eactions"><button type="button" class="primary" id="shareBtn">Send the link</button><span class="msg" id="shareMsg"></span></div>
     </div></div>
   </section>
@@ -444,7 +445,18 @@ function render(){
 
 $("prev").onclick=()=>{view.setMonth(view.getMonth()-1);render()};
 $("next").onclick=()=>{view.setMonth(view.getMonth()+1);render()};
-function setLive(on,text){$("live").classList.toggle("on",on);$("liveText").textContent=text}
+let connected=false, pending=0, pendingTimer=null;
+function setLive(on,text){connected=on;$("live").classList.toggle("on",on&&!pending);$("liveText").textContent=pending?"Saving…":text}
+function liveRefresh(){setLive(connected,connected?"Live":"Offline")}
+// Every save goes through here: shows "Saving…" until the database confirms it.
+function saving(p){
+  pending++;liveRefresh();
+  clearTimeout(pendingTimer);
+  pendingTimer=setTimeout(()=>{if(pending){notice("Your change is saved on this phone and will be sent as soon as the internet connection is back.");reconnect()}},4000);
+  return Promise.resolve(p).finally(()=>{pending--;if(!pending){clearTimeout(pendingTimer);if($("notice").textContent.startsWith("Your change is saved"))notice("")}liveRefresh()});
+}
+// Wake the live connection back up (phones put it to sleep in the background).
+function reconnect(){try{const db=firebase.database();db.goOffline();db.goOnline()}catch{}}
 function notice(t){$("notice").hidden=!t;$("notice").textContent=t||""}
 const saveErr="Couldn't save. Check your internet connection and try again.";
 
@@ -452,7 +464,7 @@ const saveErr="Couldn't save. Check your internet connection and try again.";
 $("bills").addEventListener("change",async e=>{
   const cb=e.target.closest("input[data-bill]");if(!cb||!canEdit)return;
   const mk=keyOf(view), b=bills().find(x=>x.id===cb.dataset.bill);
-  try{await budgetRef.child("paid/"+mk+"/"+cb.dataset.bill).set(cb.checked?(b?b.amount:0):null)}catch{cb.checked=!cb.checked;notice(saveErr)}
+  try{await saving(budgetRef.child("paid/"+mk+"/"+cb.dataset.bill).set(cb.checked?(b?b.amount:0):null))}catch{cb.checked=!cb.checked;notice(saveErr)}
 });
 $("addForm").addEventListener("submit",async e=>{
   e.preventDefault();
@@ -463,7 +475,7 @@ $("addForm").addEventListener("submit",async e=>{
   $("addBtn").disabled=true;
   const date=$("date").value||todayISO();
   try{
-    await budgetRef.child("expenses").push({amount,category:cat,note:$("note").value.trim(),date,created:Date.now()});
+    await saving(budgetRef.child("expenses").push({amount,category:cat,note:$("note").value.trim(),date,created:Date.now()}));
     $("amt").value="";$("note").value="";msg.textContent=`Added ${money(amount)} to ${catOf(cat).name}.`;
     const d=new Date(date+"T12:00");if(keyOf(d)!==keyOf(view)){view=new Date(d.getFullYear(),d.getMonth(),1);render()}
   }catch{msg.className="msg err";msg.textContent=saveErr}
@@ -477,7 +489,7 @@ $("list").addEventListener("click",async e=>{
     pendingDel=b.dataset.id;b.classList.add("confirm");b.textContent="Tap to confirm";
     clearTimeout(delTimer);delTimer=setTimeout(()=>{pendingDel=null;render()},4000);return}
   pendingDel=null;clearTimeout(delTimer);
-  try{await budgetRef.child("expenses/"+b.dataset.id).remove()}catch{notice(saveErr)}
+  try{await saving(budgetRef.child("expenses/"+b.dataset.id).remove())}catch{notice(saveErr)}
 });
 
 function makeEditor(kind){
@@ -522,7 +534,7 @@ function makeEditor(kind){
       }
       if(!canEdit){m.textContent="Not connected yet, so changes can't be saved.";return}
       t.disabled=true;
-      try{await budgetRef.child("config").set({bills:kind==="bills"?out:bills(),cats:kind==="cats"?out:cats()});close()}
+      try{await saving(budgetRef.child("config").set({bills:kind==="bills"?out:bills(),cats:kind==="cats"?out:cats()}));close()}
       catch{m.textContent=saveErr;t.disabled=false}
     }
   });
@@ -583,6 +595,7 @@ function viewerLink(){return location.origin+location.pathname+"?view="+budgetId
 function showShare(){
   const link=viewerLink();
   $("shareLink").textContent=link;
+  $("shareCode").textContent="Budget code "+budgetCode()+" · viewers see this same code";
   $("qr").innerHTML="";
   try{new QRCode($("qr"),{text:link,width:180,height:180,colorDark:"#15212c",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M})}catch{$("qr").textContent="QR code unavailable"}
 }
@@ -601,8 +614,9 @@ function subscribe(id){
   firebase.database().ref(".info/connected").on("value",s=>setLive(!!s.val(),s.val()?"Live":"Offline"));
 }
 let lastUpdate=0;
+const budgetCode=()=>budgetId?budgetId.slice(-4).toUpperCase():"";
 function showUpdated(){lastUpdate=Date.now();const el=$("updatedAt");if(MODE!=="viewer")return;
-  el.hidden=false;el.textContent="Updated "+new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}
+  el.hidden=false;el.textContent="Updated "+new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})+" · Budget code "+budgetCode()}
 function applySnap(snap){
     showUpdated();
     if(!snap.exists()){
@@ -618,17 +632,18 @@ function applySnap(snap){
 
 // ---- View-only: refresh button, and refresh when the page comes back on screen ----
 let refreshing=false;
-async function refreshNow(){
+async function refreshNow(soft){
   if(refreshing||!budgetRef)return;refreshing=true;$("refreshBtn").classList.add("spin");
-  try{
-    const db=firebase.database();db.goOffline();db.goOnline();     // reconnect the live link
+  if(!soft){setTimeout(()=>location.reload(),250);return}   // button: reload everything fresh
+  try{reconnect();
     const snap=await Promise.race([budgetRef.get(),new Promise((_,r)=>setTimeout(()=>r(new Error("timeout")),8000))]);
     applySnap(snap);
   }catch{location.reload();return}
   finally{refreshing=false;$("refreshBtn").classList.remove("spin")}
 }
-$("refreshBtn").onclick=refreshNow;
-document.addEventListener("visibilitychange",()=>{if(MODE==="viewer"&&document.visibilityState==="visible"&&Date.now()-lastUpdate>5000)refreshNow()});
+$("refreshBtn").onclick=()=>refreshNow(false);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&budgetRef){reconnect();if(MODE==="viewer"&&Date.now()-lastUpdate>5000)refreshNow(true)}});
+addEventListener("online",()=>{if(budgetRef)reconnect()});
 
 async function startOwner(){
   makeEditor("bills");makeEditor("cats");
