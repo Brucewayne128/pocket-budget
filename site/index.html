@@ -248,7 +248,11 @@ body[data-mode="landing"] .live{visibility:hidden}
 
   <div class="pane" id="pane-1" role="tabpanel" aria-labelledby="tab-1">
   <form class="card" id="addForm" autocomplete="off">
-    <h3>Add an expense</h3>
+    <button type="button" class="collhead" id="addToggle" aria-expanded="true" aria-controls="addBody">
+      <h3>Add an expense</h3>
+      <svg class="chev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="collbody open" id="addBody"><div class="collinner">
     <div class="field">
       <label for="amt">Amount ($)</label>
       <input id="amt" class="amount" inputmode="decimal" placeholder="0.00">
@@ -263,6 +267,7 @@ body[data-mode="landing"] .live{visibility:hidden}
     </div>
     <button class="primary" id="addBtn" type="submit">Add expense</button>
     <div class="msg" id="formMsg"></div>
+    </div></div>
   </form>
 
   <section class="card">
@@ -541,16 +546,18 @@ function makeEditor(kind){
 })();
 
 
-// ---- Share section: arrow opens and closes it (remembered on this phone) ----
-(function(){
-  const btn=$("shareToggle"), body=$("shareBody");
+// ---- Fold-up sections: the arrow opens and closes them (remembered on this phone) ----
+function collapsible(btnId,bodyId,key,openByDefault,label){
+  const btn=$(btnId), body=$(bodyId);
   function set(open,save){btn.setAttribute("aria-expanded",String(open));body.classList.toggle("open",open);
-    btn.setAttribute("aria-label",open?"Hide the share section":"Show the share section");
-    if(save)try{localStorage.setItem("pb_share_open",open?"1":"0")}catch{}}
-  let start=false;try{start=localStorage.getItem("pb_share_open")==="1"}catch{}
+    btn.setAttribute("aria-label",(open?"Hide ":"Show ")+label);
+    if(save)try{localStorage.setItem(key,open?"1":"0")}catch{}}
+  let start=openByDefault;try{const v=localStorage.getItem(key);if(v!==null)start=v==="1"}catch{}
   set(start,false);
   btn.onclick=()=>set(btn.getAttribute("aria-expanded")!=="true",true);
-})();
+}
+collapsible("shareToggle","shareBody","pb_share_open",false,"the share section");
+collapsible("addToggle","addBody","pb_add_open",true,"the add an expense section");
 
 // ---- Swipe pager ----
 const pager=$("pager"), panes=[$("pane-0"),$("pane-1")];
