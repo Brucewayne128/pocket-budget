@@ -177,6 +177,13 @@ body[data-mode="landing"] .live{visibility:hidden}
 .collbody.open{grid-template-rows:1fr;margin-top:0}
 .collinner{overflow:hidden;min-height:0;display:flex;flex-direction:column;gap:12px}
 @media (prefers-reduced-motion:reduce){.collhead .chev,.collbody{transition:none}}
+
+.refreshbtn{display:none}
+body[data-mode="viewer"] .refreshbtn{display:grid}
+.refreshbtn.spin svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.refreshbtn.spin svg{animation:none}}
+.updated{font-size:.82rem;color:var(--muted);text-align:center}
 </style>
 </head>
 <body>
@@ -185,6 +192,9 @@ body[data-mode="landing"] .live{visibility:hidden}
     <h1>Pocket Budget</h1>
     <div class="hdr-right">
       <span class="live" id="live"><span class="dot"></span><span id="liveText">Connecting</span></span>
+      <button type="button" class="themebtn refreshbtn" id="refreshBtn" aria-label="Refresh" title="Refresh">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button type="button" class="themebtn" id="themeBtn" aria-label="Switch to dark mode">
         <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M20.7 14.6A8.5 8.5 0 0 1 9.4 3.3a.7.7 0 0 0-.9-.9A9.9 9.9 0 1 0 21.6 15.5a.7.7 0 0 0-.9-.9z"/></svg>
         <svg class="i-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>
@@ -193,6 +203,7 @@ body[data-mode="landing"] .live{visibility:hidden}
   </header>
 
   <div class="viewbanner" id="viewBanner">View only · updates live from the owner's phone</div>
+  <div class="updated" id="updatedAt" hidden></div>
   <div class="notice" id="notice" hidden></div>
 
   <div class="month">
@@ -586,8 +597,14 @@ $("shareBtn").onclick=async()=>{
 function subscribe(id){
   budgetRef=firebase.database().ref("budgets/"+id);
   const timer=setTimeout(()=>{if(!ready){setLive(false,"Connecting");notice("Can't reach the budget yet. It will load once you're online.")}},10000);
-  budgetRef.on("value",snap=>{
-    clearTimeout(timer);
+  budgetRef.on("value",snap=>{clearTimeout(timer);applySnap(snap)},err=>{clearTimeout(timer);setLive(false,"Offline");notice(MODE==="viewer"?"This budget can't be viewed. The link may be wrong.":"Lost connection to your budget. Restart the app.")});
+  firebase.database().ref(".info/connected").on("value",s=>setLive(!!s.val(),s.val()?"Live":"Offline"));
+}
+let lastUpdate=0;
+function showUpdated(){lastUpdate=Date.now();const el=$("updatedAt");if(MODE!=="viewer")return;
+  el.hidden=false;el.textContent="Updated "+new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}
+function applySnap(snap){
+    showUpdated();
     if(!snap.exists()){
       ready=true;
       if(MODE==="viewer"){notice("This budget link doesn't work. Ask the owner to send their QR code again.");setLive(false,"Not found")}
@@ -597,9 +614,21 @@ function subscribe(id){
     state.paid=d.paid||{};
     state.expenses=Object.entries(d.expenses||{}).map(([id,v])=>({id,...v}));
     ready=true;notice("");renderChips();render();
-  },err=>{clearTimeout(timer);setLive(false,"Offline");notice(MODE==="viewer"?"This budget can't be viewed. The link may be wrong.":"Lost connection to your budget. Restart the app.")});
-  firebase.database().ref(".info/connected").on("value",s=>setLive(!!s.val(),s.val()?"Live":"Offline"));
 }
+
+// ---- View-only: refresh button, and refresh when the page comes back on screen ----
+let refreshing=false;
+async function refreshNow(){
+  if(refreshing||!budgetRef)return;refreshing=true;$("refreshBtn").classList.add("spin");
+  try{
+    const db=firebase.database();db.goOffline();db.goOnline();     // reconnect the live link
+    const snap=await Promise.race([budgetRef.get(),new Promise((_,r)=>setTimeout(()=>r(new Error("timeout")),8000))]);
+    applySnap(snap);
+  }catch{location.reload();return}
+  finally{refreshing=false;$("refreshBtn").classList.remove("spin")}
+}
+$("refreshBtn").onclick=refreshNow;
+document.addEventListener("visibilitychange",()=>{if(MODE==="viewer"&&document.visibilityState==="visible"&&Date.now()-lastUpdate>5000)refreshNow()});
 
 async function startOwner(){
   makeEditor("bills");makeEditor("cats");
