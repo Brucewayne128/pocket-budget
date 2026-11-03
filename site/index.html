@@ -274,6 +274,10 @@ body[data-mode="viewer"] .hdr-right .themebtn{width:34px;height:34px}
 .titlestack h3{margin:0}
 .titlestack span{font-size:.85rem;color:var(--muted)}
 .cardhead.hasfold .editbtn{flex:none}
+
+.saveedit{display:flex;flex-direction:column;gap:8px;background:var(--bg);border-radius:12px;padding:12px}
+.saveedit label{font-size:.8rem;font-weight:600;color:var(--muted)}
+.saveedit input{background:var(--surface) !important;font-size:1.3rem !important;font-weight:700}
 </style>
 </head>
 <body>
@@ -429,6 +433,16 @@ body[data-mode="viewer"] .hdr-right .themebtn{width:34px;height:34px}
       <h3>This month</h3>
       <div class="ledger" id="incomeSummary"></div>
     </section>
+    <section class="card">
+      <div class="cardhead"><h3>Savings</h3><button class="editbtn" id="editSavings" type="button">Edit savings</button></div>
+      <form class="saveedit" id="savingsEditor" hidden>
+        <label for="savingsInput">Amount saved up so far ($)</label>
+        <input id="savingsInput" inputmode="decimal" placeholder="0.00">
+        <div class="eactions"><button type="submit" class="primary">Save</button><button type="button" class="ghost" id="savingsCancel">Cancel</button></div>
+        <div class="emsg" id="savingsMsg"></div>
+      </form>
+      <div class="ledger" id="savingsBox"></div>
+    </section>
     <button type="button" class="ghost backbtn" id="iBack">← Back to bills and spending</button>
   </section>
 
@@ -503,7 +517,7 @@ function store(k,v){try{localStorage.setItem(k,v)}catch{}}
 function load(k){try{return localStorage.getItem(k)}catch{return null}}
 
 let view=new Date(); view.setDate(1);
-let state={paid:{},expenses:[],config:null,billMonths:{},billPlans:{},incomeMonths:{},incomePlans:{}};
+let state={paid:{},expenses:[],config:null,billMonths:{},billPlans:{},incomeMonths:{},incomePlans:{},savings:{}};
 let cat="food", budgetRef=null, ready=false, canEdit=false, budgetId=null;
 
 const asList=x=>Array.isArray(x)?x.filter(Boolean):Object.values(x||{}).filter(Boolean);
@@ -965,7 +979,27 @@ function renderIncome(){
     <div class="lrow"><span>Everything else, spent and unspent</span><b class="num">−${money(everything)}</b><small class="num">${money(other)} spent · ${money(unspent)} still left in your budgets</small></div>
     <div class="lrow total"><span>Total expenses</span><b class="num">−${money(total)}</b></div>
     <div class="lrow left"><span>${left<0?"Short by":"Left after expenses"}</span><b class="num${left<0?" neg":""}">${money(Math.abs(left))}</b></div>`;
+  // Savings: the amount saved so far (kept until you change it), plus what's left after expenses this month.
+  const saved=savingsFor(mk), goal=saved+left;
+  $("savingsBox").innerHTML=`
+    <div class="lrow"><span>Saved up so far</span><b class="num">${money(saved)}</b></div>
+    <div class="lrow"><span>${left<0?"Taken from savings this month":"Added to savings at the end of the month"}</span><b class="num${left<0?" neg":" plus"}">${left<0?"−":"+"}${money(Math.abs(left))}</b><small>From "${left<0?"Short by":"Left after expenses"}" above</small></div>
+    <div class="lrow left total"><span>Savings goal</span><b class="num${goal<0?" neg":""}">${goal<0?"−":""}${money(Math.abs(goal))}</b></div>`;
 }
+// The saved amount carries forward: a month uses the latest amount saved on or before it.
+function savingsFor(mk){const ks=Object.keys(state.savings||{}).filter(k=>k<=mk).sort();return ks.length?(+state.savings[ks[ks.length-1]]||0):0}
+$("editSavings").onclick=()=>{const f=$("savingsEditor");
+  if(!f.hidden){f.hidden=true;$("editSavings").textContent="Edit savings";return}
+  const v=savingsFor(keyOf(view));$("savingsInput").value=v?v:"";$("savingsMsg").textContent="";
+  f.hidden=false;$("editSavings").textContent="Close";$("savingsInput").focus()};
+$("savingsCancel").onclick=()=>{$("savingsEditor").hidden=true;$("editSavings").textContent="Edit savings"};
+$("savingsEditor").addEventListener("submit",async e=>{
+  e.preventDefault();const raw=$("savingsInput").value.trim(), v=raw===""?0:parseAmt(raw), m=$("savingsMsg");
+  if(!(v>=0)){m.textContent="Enter the amount as a number, like 2500.";return}
+  if(!canEdit){m.textContent="Not connected yet, so this can't be saved.";return}
+  try{await saving(budgetRef.child("savings/"+keyOf(view)).set(v));$("savingsEditor").hidden=true;$("editSavings").textContent="Edit savings"}
+  catch{m.textContent=saveErr}
+});
 function openIncome(open){
   if(open&&yearOpen)openYear(false);
   incomeOpen=open;document.body.classList.toggle("incomemode",open);$("incomePage").hidden=!open;
@@ -1010,6 +1044,7 @@ foldify("list","spending","spending this month");
 foldify("bills","bills","monthly bills");
 foldify("deposits","deposits","deposits");
 foldify("incomeSummary","incomeSummary","this month's income summary");
+foldify("savingsBox","savings","savings");
 foldify("chartBox","chart","the graph");
 foldify("facts","facts","year details");
 foldify("mtable","mtable","month by month");
@@ -1062,6 +1097,7 @@ function applySnap(snap){
     state.config=d.config?{bills:asList(d.config.bills),cats:asList(d.config.cats).length?asList(d.config.cats):DEFAULT_CATS}:null;
     state.billMonths=d.billMonths||{};state.billPlans=d.billPlans||{};
     state.incomeMonths=d.incomeMonths||{};state.incomePlans=d.incomePlans||{};
+    state.savings=d.savings||{};
     state.paid=d.paid||{};
     state.expenses=Object.entries(d.expenses||{}).map(([id,v])=>({id,...v}));
     ready=true;notice("");renderChips();render();
