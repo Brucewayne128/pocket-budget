@@ -984,7 +984,7 @@ function renderIncome(){
   $("savingsBox").innerHTML=`
     <div class="lrow"><span>Saved up so far</span><b class="num">${money(saved)}</b></div>
     <div class="lrow"><span>${left<0?"Taken from savings this month":"Added to savings at the end of the month"}</span><b class="num${left<0?" neg":" plus"}">${left<0?"−":"+"}${money(Math.abs(left))}</b><small>From "${left<0?"Short by":"Left after expenses"}" above</small></div>
-    <div class="lrow left total"><span>Savings goal</span><b class="num${goal<0?" neg":""}">${goal<0?"−":""}${money(Math.abs(goal))}</b></div>`;
+    <div class="lrow left total"><span>Expected savings</span><b class="num${goal<0?" neg":""}">${goal<0?"−":""}${money(Math.abs(goal))}</b></div>`;
 }
 // The saved amount carries forward: a month uses the latest amount saved on or before it.
 function savingsFor(mk){const ks=Object.keys(state.savings||{}).filter(k=>k<=mk).sort();return ks.length?(+state.savings[ks[ks.length-1]]||0):0}
